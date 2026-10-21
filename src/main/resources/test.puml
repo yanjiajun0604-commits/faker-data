@@ -1,0 +1,76 @@
+@startmindmap
+* 表
+** 老师表
+** 学生信息表
+** 村子表\n CUN\d{10} \n  (光明|快乐|阳光|幸福|吉祥|刘家|闫家|张家|陈家)村
+** 班级表\n BAN\d{10} \n 小学[1-6]年级[1-9]班
+@endmindmap
+
+@startmindmap
+* 功能优点
+** 生成规则丰富
+** 支持互相关联的多表同时生成数据
+** 有进度条提示数据进度
+** 操作简单，部署简单
+@endmindmap
+
+@startmindmap
+* 技术选型
+** springboot
+** vue
+** redis
+** mysql，后期考虑换成 sqlLite更加轻量
+** 支持微服务模式需要用到 nacos、gateway
+** 核心类库\n hutool包下的 DefaultRegexGen.java用来生成部分随机数 \n 原生jdbc 获取库表信息 \n jdbcTemplate 生成数据
+@endmindmap
+
+
+@startmindmap
+* 技术亮点
+** 实现抽象类即可扩展\n eg: 随机范围时间：RangeDateRegMetaType\n 随机手机号码：RangeStringRegMetaType
+** 拓扑排序算法解决实际问题
+** 切面+redis缓存解决实际问题
+** 微服务,扩展能力强大
+@endmindmap
+
+@startuml
+(stu) --> (cunzi)
+(stu) --> (class)
+(tea) -> (class)
+(stu_tea)->(stu)
+(stu_tea)->(tea)
+@enduml
+
+
+@startmindmap
+* 后期升级
+** 多线程生成大量数据
+** 单表级次结构规则
+** 单表引用（中国->亚洲 ，美国->北美洲） ，（0~10岁->幼年， 10->18->青年）
+** 可设置随机的比重
+** 某个列的数据不可重复生成
+** 优化前端界面
+@endmindmap
+
+@startmindmap
+* 字段数据生成规则
+** 固定标识
+***[#lightgreen] 人名
+***[#lightgreen] UUID
+***[#lightgreen] 手机号
+***[#lightgreen] 身份证号
+** 固定数据
+***[#lightgreen] 手动输入(支持多个字段整体生成，如 姓名，学号 是互为绑定的)
+*** 外部资源txt文件
+** 引用
+***[#lightgreen] 其他表某列(支持多个字段整体生成，如 姓名，学号 是互为绑定的)
+*** 本表某列(支持多个字段整体生成，如 姓名，学号 是互为绑定的)
+** 随机变量
+***[#lightgreen] 自定义正则表达式
+***[#lightgreen] 范围数值
+***[#lightgreen] 范围长度字符串
+** 结构编码
+*** 树形规则生成
+@endmindmap
+
+

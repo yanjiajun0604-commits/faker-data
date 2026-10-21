@@ -1,0 +1,32 @@
+server:
+  port: ${SERVER_PORT:8085}
+  servlet:
+    context-path: /faker
+
+spring:
+  application:
+    name: faker-data
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    url: ${FAKER_DB_URL:jdbc:mysql://localhost:3306/faker_data?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC}
+    username: ${FAKER_DB_USERNAME:faker}
+    password: ${FAKER_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  redis:
+    database: ${FAKER_REDIS_DATABASE:0}
+    host: ${FAKER_REDIS_HOST:localhost}
+    port: ${FAKER_REDIS_PORT:6379}
+    password: ${FAKER_REDIS_PASSWORD:}
+    timeout: 60000
+    enabled: true
+
+logging:
+  level:
+    pers.bbs.asynctask.repository.AsyncTaskDBQueueDao: OFF
+
+asynctask:
+  executor-pool-size: 2
