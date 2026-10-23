@@ -30,7 +30,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: v0.1.0
       SOURCE_ASSET: faker-data-source-0.1.0.zip
-      SOURCE_SHA256: 8fdbb6947b146c326ad4f2af641ddd26a3b9da7d271a215292381a2fe6557bec
+      SOURCE_SHA256: a686bf217a4712e54c55df0771cee23460f7e31a65adee6456596f22cf89dafd
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
