@@ -1,0 +1,8 @@
+* text=auto
+*.sh text eol=lf
+mvnw text eol=lf
+*.cmd text eol=crlf
+src/main/resources/static/** linguist-generated=true
+frontend/public/AI_USAGE* linguist-generated=true
+frontend/public/docs/** linguist-generated=true
+frontend/public/examples/** linguist-generated=true

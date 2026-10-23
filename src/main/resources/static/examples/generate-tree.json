@@ -1,0 +1,80 @@
+{
+  "dataSource": {
+    "type": "MYSQL",
+    "url": "jdbc:mysql://127.0.0.1:3306/faker_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+    "username": "faker_demo",
+    "password": ""
+  },
+  "tables": [
+    {
+      "name": "ai_demo_tree",
+      "size": 7,
+      "treeConfig": {
+        "nodeField": "id",
+        "parentRefField": "parent_id",
+        "maxDepth": 3,
+        "minRoots": 1,
+        "maxRoots": 1,
+        "minChildrenPerNode": 2,
+        "maxChildrenPerNode": 2,
+        "treeCodeEnabled": true,
+        "treeCodeField": "tree_code",
+        "layerBitWidths": [
+          2,
+          2,
+          2
+        ]
+      },
+      "columns": [
+        {
+          "name": "id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 0,
+          "length": 36,
+          "regs": [
+            {
+              "code": "FIX.UUID"
+            }
+          ]
+        },
+        {
+          "name": "parent_id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 1,
+          "length": 36,
+          "regs": [
+            {
+              "code": "STRUCT.TREE_PARENT"
+            }
+          ]
+        },
+        {
+          "name": "tree_code",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 1,
+          "length": 32,
+          "regs": [
+            {
+              "code": "STRUCT.TREE_CODE"
+            }
+          ]
+        },
+        {
+          "name": "label",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 1,
+          "length": 64,
+          "regs": [
+            {
+              "code": "FIX.PEOPLE_NAME"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

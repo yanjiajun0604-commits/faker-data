@@ -1,80 +1,163 @@
 # faker-data
 
-基于 Java / Spring Boot 的数据库测试数据生成后端，根据字段规则批量生成模拟数据，支持跨表引用、条件规则和树形结构。
+### Test data that belongs together.
 
-## 功能
+**A local visual studio for relational test data — run one JAR, define your rules, and fill your test database.**
 
-- MySQL、Oracle、达梦数据库连接及表、字段元数据读取。
-- 姓名、手机号、标识符、UUID 等固定类型生成规则。
-- 数值、日期、字符串区间及自增规则。
-- 手工输入数据、加权选取、同表与跨表引用。
-- 基于 SpEL 的条件规则及内置函数。
-- 树形拓扑、父节点引用与层级编码。
-- 生成方案保存、读取和删除，异步生成任务执行。
+**English** · [简体中文](README.zh-CN.md) · [Download](https://github.com/yanjiajun0604-commits/faker-data/releases/latest) · [AI / API guide](AI_USAGE.en.md)
 
-本仓库为后端项目，前端不包含在此次发布中。
+[![MIT License](https://img.shields.io/badge/license-MIT-2a7d59)](LICENSE)
+[![Java 8](https://img.shields.io/badge/Java-8%2B-64796a)](pom.xml)
+[![Local first](https://img.shields.io/badge/local-first-387b61)](README.md#how-it-runs)
 
-## 技术与依赖
+Random names are useful. Orders linked to the right users, a department tree with valid parents, and discounts that follow membership rules are useful **together**. faker-data lets you describe those scenarios in a visual workspace and write the generated rows into your existing test tables.
 
-- Spring Boot 2.3.9.RELEASE、Maven、Java。
-- MySQL（应用配置及方案存储）、Redis（数据引用缓存）。
-- JDBC 驱动、Hutool、data-factory、Lombok。
+![The actual faker-data workspace](docs/images/studio-desktop.jpg)
 
-当前 POM 依赖 `pers.bbs:asynctask:0.0.1-SNAPSHOT` 和 `dm:dm-connector-java:8.1.1.126`。本仓库未附带这些依赖的源码或二进制，也未配置它们的公开仓库。构建前需要在具有使用权限的前提下，将相应制品及其传递依赖安装到本机 Maven 仓库，或配置可访问的制品仓库。首次克隆后能否直接构建尚未验证。
+## From empty tables to useful scenarios
 
-## 本地运行
+| You need | Use faker-data to |
+| --- | --- |
+| Data for API testing, integration, or a demo | Generate rows with field-level rules rather than hand-written INSERT scripts |
+| Related users, orders, or other parent/child records | Generate parent rows and reference them from child tables in the same task |
+| Organizations, departments, or menus | Build tree structures with parent references and optional hierarchical codes |
+| Business-dependent values | Combine conditional rules, weighted inputs, and references to other fields |
+| The same setup next time | Save a local generation scheme and reuse it |
+| An AI-driven workflow | Let a local AI agent inspect metadata, prepare rules, submit a task, and poll the HTTP API |
 
-先准备独立的 MySQL 测试库、数据库账号和 Redis，再设置环境变量。下面是 PowerShell 示例，密码需要替换为你自己的值：
+Supports **MySQL, Oracle, and Dameng** as target databases. Switch between **English and 简体中文** in the top-right language selector. Your choice is remembered, and changing language preserves the current connection, rules and running task. The default follows your browser language. English documentation, JSON examples, and an English API guide are included.
+
+
+## A closer look
+
+<details>
+<summary>Field rules, cross-table references, and same-row references</summary>
+
+![Visual field-rule configuration](docs/images/field-rules.png)
+
+![Cross-table reference editor](docs/images/cross-table-reference.png)
+
+![Same-row reference editor](docs/images/same-row-reference.png)
+
+These screenshots demonstrate the editing interface, not a recommended field mapping. Use the tested JSON examples for runnable configurations; do not create circular table dependencies.
+
+</details>
+
+## Run it. No source build required.
+
+1. Download `faker-data-0.1.0.jar` from [Releases](https://github.com/yanjiajun0604-commits/faker-data/releases).
+2. With Java installed (Java 8 verified), run:
+
+```sh
+java -jar faker-data-0.1.0.jar
+```
+
+3. Open **http://127.0.0.1:8085/faker/**.
+4. Connect your authorized test database, select existing tables, configure field rules, and generate.
+
+**The application starts without a MySQL server, Redis, Node.js, or an OpenAI API key.** Your own target database is still required to actually insert generated data. AI integration is optional; the application does not contain a built-in LLM or translate prompts on its own.
+
+## One tool, three workflows
+
+- **Visual:** connect → select tables → set rules → generate and monitor.
+- **Repeatable:** save a scheme locally, load it, and adjust the next run.
+- **Agent-driven:** person → local AI agent → HTTP API → test database. Give your agent [AI_USAGE.en.md](AI_USAGE.en.md) or the [full Chinese guide](AI_USAGE.md).
+
+```text
+“Generate 20 users and 50 orders referencing those users.
+ Give VIP users an 80% price factor and other users 100%.”
+       ↓ your local AI agent reads the guide and calls the API
+metadata → generation rules → task ID → confirmed completion
+```
+
+Complete examples: [relational data](examples/generate-demo.json), [tree data](examples/generate-tree.json), [MySQL sample schema](examples/mysql-demo-schema.sql), and a [standard-library Python client](examples/ai_client.py). These examples target their own demo tables; inspect your actual schema before using them elsewhere.
+
+## Rules that fit real test cases
+
+- UUIDs, Chinese names, phone numbers, identity-shaped strings.
+- Integer ranges, incrementing sequences, string lengths, regex patterns, and date ranges.
+- Constants and weighted candidate values.
+- Same-row field references and references to newly generated parent rows.
+- SpEL conditions and helper functions.
+- Tree parent IDs and hierarchical codes.
+
+Multiple rules on one field concatenate their output. Cross-table dependencies are sorted before execution; circular dependencies are rejected. These are synthetic values, not real identity records.
+
+## How it runs
+
+The JAR bundles the Java backend and built Vue frontend. SQLite stores schemes and task metadata in `./data/faker-data.db`. A bounded in-process queue runs tasks; a task-scoped memory cache stores cross-table reference values by default. No private Maven snapshot artifacts are required.
+
+The default queue has 2 workers and 100 waiting slots. The memory reference cache defaults to 500,000 entries / an estimated 128 MiB. It fails explicitly when full rather than evicting values still needed by another row. This is a reference-cache estimate, not a total JVM heap limit; tree state, row IDs, and JDBC buffers also use memory.
+
+Optional Redis mode can offload reference values:
+
+```sh
+java -jar faker-data-0.1.0.jar --faker.cache.backend=redis --faker.cache.redis-host=127.0.0.1 --faker.cache.redis-port=6379
+```
+
+Redis mode still uses a **single-process task queue**, not distributed scheduling. See [configuration and design](docs/portable-design.md) and the [Chinese configuration table](README.zh-CN.md#内存缓存和可选-redis) for environment variables.
+
+Change the port without rebuilding the frontend:
+
+```sh
+java -jar faker-data-0.1.0.jar --server.port=8095
+```
+
+## Build from source
+
+Backend source: `src/main/java/`. Frontend source: `frontend/`. Built web assets are included, so a backend-only build does not require Node.js.
+
+Windows:
 
 ```powershell
-$env:FAKER_DB_URL = 'jdbc:mysql://localhost:3306/faker_data?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC'
-$env:FAKER_DB_USERNAME = 'faker'
-$env:FAKER_DB_PASSWORD = '<your-local-database-password>'
-$env:FAKER_REDIS_HOST = 'localhost'
-$env:FAKER_REDIS_PORT = '6379'
-$env:FAKER_REDIS_PASSWORD = ''
-mvn spring-boot:run
+.\run.cmd
 ```
 
-默认端口为 `8085`，接口前缀为 `/faker`。端口可通过 `SERVER_PORT` 修改。
+Linux / macOS:
 
-应用的 JPA 配置为 `ddl-auto: update`，启动时可能创建或调整应用表。请使用独立测试库。
-
-## 部分接口
-
-以下路径均带 `/faker` 前缀；数据库元数据接口接收 JSON 数据源对象。
-
-| 路径 | 用途 |
-| --- | --- |
-| `/db/connect/test` | 测试目标数据库连接 |
-| `/db/showTables` | 获取目标数据库表 |
-| `/db/showColumns/{tableName}` | 获取表字段 |
-| `POST /scheme/save` | 保存或更新同名生成方案 |
-| `GET /scheme/list` | 查看生成方案 |
-| `GET /scheme/{id}` | 获取生成方案详情 |
-| `DELETE /scheme/{id}` | 删除生成方案 |
-
-数据源对象包含 `type`、`url`、`username`、`password`。生成任务使用异步任务组件，具体参数参考 `GenerateVO`、`TableVO` 和 `MetaTypeVO`。
-
-## 测试与文档
-
-依赖就绪后可运行：
-
-```shell
-mvn test
+```sh
+chmod +x mvnw run.sh
+./run.sh
 ```
 
-仓库保留 MySQL 元数据过滤、条件规则、自增规则及树形拓扑等现有测试。此次发布未执行构建或测试，不代表运行验收已通过。
+The start script builds the JAR with Maven Wrapper if it is absent, then runs it. After changing source, rebuild explicitly:
 
-- [SpEL 内置函数说明](docs/spel-functions-guide.md)
-- [树形数据查询示例](docs/tree_visualize.sql)
+```sh
+./mvnw test
+./mvnw package
+java -jar target/faker-data-0.1.0.jar
+```
 
-## 使用边界
+To rebuild the UI (Node.js and npm required):
 
-本项目会向目标数据库写入数据；仅在授权的测试环境使用。目前接口未提供完整的访问控制，生成方案还会序列化保存所填的数据源信息（含密码），因此仅适合受控的本地或测试网络，勿直接开放至公网。
+```sh
+cd frontend
+npm ci
+npm run build
+cd ..
+./mvnw package
+```
 
-此次 GitHub 发布采用当前源码快照，未迁移原 Git 历史、本机配置、日志或 AI 工具目录。配置中的连接凭据已改为环境变量。
+The wrapper downloads public Maven dependencies on its first run. No local `bbs` checkout or private artifact registry is needed. Java 8 and Node.js 24 were verified locally; platform-specific startup should still be checked on your own system.
 
-## 许可证
+## Verification and limits
 
-当前尚未指定开源许可证。公开仓库不等于已授予任意使用、修改和分发的许可；正式采用前需由维护者确定许可证，并核对第三方依赖的许可要求。
+The release has been checked against an isolated **MySQL 8.0.31** instance through the actual HTTP API in memory and Redis modes: metadata discovery, scheme save/load, relational data, same-row references, conditional rules, date/BIGINT/DECIMAL values, tree generation, rollback on a child-table constraint failure, and restart persistence. See [verification details](docs/verification.md).
+
+Unit/integration tests use SQLite and H2 without requiring an external target database. Optional Redis tests run only with an explicit `-Dfaker.redis.test.port=...` value. Oracle and Dameng drivers are included from public Maven coordinates; their live compatibility was **not** verified in this release.
+
+The tool inserts into existing tables. It does not create a schema, clear old data, or automatically avoid existing unique values. Increment sequences restart per task. A task reaches FINISHED/100 only after the target transaction returns successfully; interrupted tasks are marked failed on restart and are not replayed automatically. Use transactional target tables when relying on rollback.
+
+## Local use and credentials
+
+The server binds to `127.0.0.1` by default. It has no authentication and should not be exposed directly to the Internet. Saved schemes contain the supplied connection credentials; protect `data/` and do not commit real request files, database files, or passwords. Use only databases you are authorized to write to.
+
+## Help shape the project
+
+Found a reproducible issue or need a rule for your workflow? [Open an issue](https://github.com/yanjiajun0604-commits/faker-data/issues/new/choose) with a small, redacted example. Contributions that improve database compatibility, agent workflows, usability, and reproducible tests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+If the tool saves you time, a star helps other developers discover it. Real usage reports and small reproducible examples help improve it even more.
+
+## License
+
+[MIT](LICENSE) for project-owned code. Dependencies keep their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).

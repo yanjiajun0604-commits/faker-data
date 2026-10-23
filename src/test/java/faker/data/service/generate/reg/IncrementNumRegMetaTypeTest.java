@@ -20,6 +20,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class IncrementNumRegMetaTypeTest {
 
+    @Test
+    void finishingOneTaskReleasesItsCountersWithoutResettingAnotherTask() {
+        MetaTypeVO rule = new MetaTypeVO();rule.setMinSize(10);rule.setStep(1);
+        ColumnInfo column = new ColumnInfo();column.setName("id");
+        assertEquals(10L,metaType.doParse(rule,"finished","t",column));
+        assertEquals(10L,metaType.doParse(rule,"active","t",column));
+        IncrementNumRegMetaType.clearTask("finished");
+        assertEquals(11L,metaType.doParse(rule,"active","t",column));
+        assertEquals(10L,metaType.doParse(rule,"finished","t",column));
+    }
+
     private final IncrementNumRegMetaType metaType = new IncrementNumRegMetaType();
 
     @BeforeEach

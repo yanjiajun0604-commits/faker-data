@@ -1,0 +1,16 @@
+name: Feature request / 功能建议
+description: Describe the test-data workflow you want to improve.
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Your scenario / 使用场景
+      description: Describe the data relationships or testing task, not only a proposed implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Desired result / 希望得到的结果
+    validations:
+      required: true

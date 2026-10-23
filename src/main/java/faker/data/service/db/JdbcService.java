@@ -3,8 +3,8 @@ package faker.data.service.db;
 import faker.data.domain.ColumnInfo;
 import faker.data.domain.TableVO;
 import faker.data.service.generate.executor.GenerateDataExecutor;
-import pers.bbs.asynctask.executor.AsyncTaskExecutor;
-import pers.bbs.asynctask.monitor.AsyncTaskMonitor;
+import faker.data.task.AsyncTaskExecutor;
+import faker.data.task.AsyncTaskMonitor;
 
 import java.util.List;
 import java.util.Map;

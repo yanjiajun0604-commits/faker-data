@@ -1,46 +1,21 @@
-HELP.md
 target/
-!.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-
-logs/
-
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
-*.iws
+/logs/
+/data/
+*.db
+*.db-shm
+*.db-wal
+.idea/
 *.iml
-*.ipr
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
-.vscode/
-
-# Local configuration, editor tools and operating-system metadata
 .DS_Store
-.codebuddy/
-.superpowers/
 .env
 .env.*
 !.env.example
+.codebuddy/
+.superpowers/
+frontend/node_modules/
+frontend/dist/
+frontend/public/AI_USAGE.md
+frontend/public/AI_USAGE.en.md
+frontend/public/examples/
+frontend/public/docs/
 src/main/resources/application-local.yml
-src/main/resources/application-local.yaml
-*.log

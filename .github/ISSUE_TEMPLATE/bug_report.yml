@@ -1,0 +1,28 @@
+name: Bug report / 问题反馈
+description: Report a reproducible problem with a redacted example.
+body:
+  - type: markdown
+    attributes:
+      value: "Please remove credentials, personal data, and private database files. 请勿上传密码、业务数据或 SQLite 文件。"
+  - type: input
+    id: version
+    attributes:
+      label: Application / Java / target database versions
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps and minimal schema/request / 复现步骤与最小样例
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual result / 预期与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: Task state and redacted error / 任务状态与脱敏错误

@@ -22,10 +22,14 @@ public class IncrementNumRegMetaType extends AbstractRegMetaType {
 
     /**
      * 每个列的独立计数器。
-     * 注意：随任务量增长会持续累积，进程重启时清空；如需长期清理可在外层增加 LRU 或定期清理任务。
+     * 任务结束后由 LocalTaskService 统一释放，不影响其他正在执行的任务。
      */
     private static final ConcurrentHashMap<String, AtomicLong> counters =
             new ConcurrentHashMap<>();
+
+    public static void clearTask(String taskId) {
+        if (taskId != null) counters.keySet().removeIf(key -> key.startsWith(taskId + ":"));
+    }
 
     @Override
     public String getCode() {

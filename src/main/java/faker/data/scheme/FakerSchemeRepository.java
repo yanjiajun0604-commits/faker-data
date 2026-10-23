@@ -1,11 +1,23 @@
 package faker.data.scheme;
-
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
-
+import org.springframework.jdbc.core.*;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.*;
 @Repository
-public interface FakerSchemeRepository extends JpaRepository<FakerScheme, Long> {
-    Optional<FakerScheme> findByName(String name);
+public class FakerSchemeRepository {
+    private final JdbcTemplate jdbc;
+    public FakerSchemeRepository(JdbcTemplate jdbc){this.jdbc=jdbc;}
+    private final RowMapper<FakerScheme> mapper=(rs,n)->{
+        FakerScheme s=new FakerScheme();s.setId(rs.getLong("id"));s.setName(rs.getString("name"));
+        s.setDataSourceJson(rs.getString("data_source_json"));s.setTablesJson(rs.getString("tables_json"));
+        s.setCreatedAt(new Date(rs.getLong("created_at")));s.setUpdatedAt(new Date(rs.getLong("updated_at")));return s;
+    };
+    @Transactional public FakerScheme upsert(String name,String source,String tables){
+        long now=System.currentTimeMillis();
+        jdbc.update("INSERT INTO faker_scheme(name,data_source_json,tables_json,created_at,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET data_source_json=excluded.data_source_json,tables_json=excluded.tables_json,updated_at=excluded.updated_at",name,source,tables,now,now);
+        return jdbc.queryForObject("SELECT * FROM faker_scheme WHERE name=?",mapper,name);
+    }
+    public List<FakerScheme> findAll(){return jdbc.query("SELECT * FROM faker_scheme ORDER BY updated_at DESC,id DESC",mapper);}
+    public Optional<FakerScheme> findById(Long id){return jdbc.query("SELECT * FROM faker_scheme WHERE id=?",mapper,id).stream().findFirst();}
+    public void deleteById(Long id){jdbc.update("DELETE FROM faker_scheme WHERE id=?",id);}
 }

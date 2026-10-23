@@ -14,15 +14,15 @@ import faker.data.service.generate.MetaTypeVO;
 import faker.data.service.generate.ref.RefOtherTableMetaType;
 import faker.data.utils.ApplicationContextProvider;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
+import faker.data.cache.ReferenceCache;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
-import pers.bbs.asynctask.executor.AsyncTaskExecutor;
-import pers.bbs.asynctask.monitor.AsyncTaskMonitor;
+import faker.data.task.AsyncTaskExecutor;
+import faker.data.task.AsyncTaskMonitor;
 
 import java.math.BigDecimal;
 import java.sql.*;
@@ -435,12 +435,10 @@ public abstract class AbstractJdbcService implements JdbcService {
         rowValues.put(columnInfo.getName(), value);
         rowValues.put(columnInfo.getName().toLowerCase(), value);
 
-        // 该字段被跨表引用时，将完整拼接结果缓存到 Redis
         if (columnInfo.isDepended()) {
-            String key = transId + ":" + curTabName.toLowerCase() + ":" + columnInfo.getName().toLowerCase();
-            RedisTemplate redisTemplate = (RedisTemplate) ApplicationContextProvider.getContext().getBean("redisTemplate");
-            redisTemplate.opsForHash().put(key, rowId, value);
-            redisTemplate.expire(key, 60 * 60 * 18, TimeUnit.SECONDS);
+            String key = curTabName.toLowerCase(java.util.Locale.ROOT) + ":" + columnInfo.getName().toLowerCase(java.util.Locale.ROOT);
+            ReferenceCache cache = ApplicationContextProvider.getContext().getBean(ReferenceCache.class);
+            cache.put(transId, key, rowId, value);
         }
 
         return value;
@@ -546,6 +544,26 @@ public abstract class AbstractJdbcService implements JdbcService {
             String type = javaType.substring(javaType.lastIndexOf(".") + 1);
             Object value = rowValues.get(columnInfo.getName());
             switch (type) {
+                case "Long":
+                    Long longValue = Convert.toLong(value);
+                    if (longValue == null) ps.setNull(k + 1, Types.BIGINT);
+                    else ps.setLong(k + 1, longValue);
+                    break;
+                case "BigInteger":
+                    java.math.BigInteger integerValue = Convert.toBigInteger(value);
+                    if (integerValue == null) ps.setNull(k + 1, Types.NUMERIC);
+                    else ps.setBigDecimal(k + 1, new BigDecimal(integerValue));
+                    break;
+                case "Short":
+                    Short shortValue = Convert.toShort(value);
+                    if (shortValue == null) ps.setNull(k + 1, Types.SMALLINT);
+                    else ps.setShort(k + 1, shortValue);
+                    break;
+                case "Byte":
+                    Byte byteValue = Convert.toByte(value);
+                    if (byteValue == null) ps.setNull(k + 1, Types.TINYINT);
+                    else ps.setByte(k + 1, byteValue);
+                    break;
                 case "String":
                     if (value == null && columnInfo.getNullable() != null && columnInfo.getNullable() == 0) {
                         // NOT NULL 列且生成值为 null（如树形根节点的 parent_id），写入空串兜底
@@ -580,9 +598,19 @@ public abstract class AbstractJdbcService implements JdbcService {
                     break;
                 case "TIMESTAMP":
                 case "Timestamp":
+                case "LocalDateTime":
                 case "Date":
                     Long aLong = Convert.toLong(value);
                     ps.setTimestamp(k + 1, aLong == null ? null : new Timestamp(aLong));
+                    break;
+                case "LocalDate":
+                    Long dateMillis = Convert.toLong(value);
+                    ps.setDate(k + 1, dateMillis == null ? null : new java.sql.Date(dateMillis));
+                    break;
+                case "Time":
+                case "LocalTime":
+                    Long timeMillis = Convert.toLong(value);
+                    ps.setTime(k + 1, timeMillis == null ? null : new java.sql.Time(timeMillis));
                     break;
                 case "Boolean":
                     Boolean bool = Convert.toBool(value);
@@ -595,14 +623,13 @@ public abstract class AbstractJdbcService implements JdbcService {
                 case "BigDecimal":
                     BigDecimal bigDecimal = Convert.toBigDecimal(value);
                     if (bigDecimal == null) {
-                        ps.setNull(k + 1, Types.BOOLEAN);
+                        ps.setNull(k + 1, Types.DECIMAL);
                         break;
                     }
                     ps.setBigDecimal(k + 1, bigDecimal);
                     break;
                 default:
-                    log.error("未知类型：{}", type);
-                    ps.setNull(k + 1, Types.BIT);
+                    throw new SQLException("尚不支持字段 " + columnInfo.getName() + " 的 JDBC Java 类型：" + javaType);
             }
         }
     }

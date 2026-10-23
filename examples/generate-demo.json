@@ -1,0 +1,205 @@
+{
+  "dataSource": {
+    "type": "MYSQL",
+    "url": "jdbc:mysql://127.0.0.1:3306/faker_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+    "username": "faker_demo",
+    "password": ""
+  },
+  "tables": [
+    {
+      "name": "ai_demo_child",
+      "size": 50,
+      "columns": [
+        {
+          "name": "id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 0,
+          "length": 36,
+          "regs": [
+            {
+              "code": "FIX.UUID"
+            }
+          ]
+        },
+        {
+          "name": "parent_id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 0,
+          "length": 36,
+          "regs": [
+            {
+              "code": "REF.OTHER_TABLE",
+              "refOtherTableColumn": [
+                "ai_demo_parent",
+                "id"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "sequence_no",
+          "javaType": "java.lang.Long",
+          "dbType": "bigint",
+          "nullable": 0,
+          "length": 64,
+          "regs": [
+            {
+              "code": "REG.INCREMENT_NUM",
+              "minSize": 1,
+              "step": 1
+            }
+          ]
+        },
+        {
+          "name": "amount",
+          "javaType": "java.math.BigDecimal",
+          "dbType": "decimal",
+          "nullable": 1,
+          "length": 64,
+          "regs": [
+            {
+              "code": "RES.INPUTAREA",
+              "inputs": [
+                {
+                  "value": "12.50",
+                  "weight": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "phone",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 1,
+          "length": 32,
+          "regs": [
+            {
+              "code": "FIX.TEL"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ai_demo_parent",
+      "size": 20,
+      "columns": [
+        {
+          "name": "id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 0,
+          "length": 36,
+          "regs": [
+            {
+              "code": "FIX.UUID"
+            }
+          ]
+        },
+        {
+          "name": "name",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 0,
+          "length": 64,
+          "regs": [
+            {
+              "code": "FIX.PEOPLE_NAME"
+            }
+          ]
+        },
+        {
+          "name": "surname",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 1,
+          "length": 8,
+          "regs": [
+            {
+              "code": "REF.SELF_COLUMN",
+              "refSelfColumn": "name",
+              "refSelfTransform": "FIRST_CHAR"
+            }
+          ]
+        },
+        {
+          "name": "kind",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "nullable": 0,
+          "length": 16,
+          "regs": [
+            {
+              "code": "RES.INPUTAREA",
+              "inputs": [
+                {
+                  "value": "vip",
+                  "weight": 1
+                },
+                {
+                  "value": "normal",
+                  "weight": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "discount",
+          "javaType": "java.lang.Integer",
+          "dbType": "int",
+          "nullable": 0,
+          "length": 64,
+          "regs": [
+            {
+              "code": "COND.EXPR",
+              "condition": "#kind == 'vip'",
+              "onTrue": [
+                {
+                  "code": "RES.INPUTAREA",
+                  "inputs": [
+                    {
+                      "value": "80",
+                      "weight": 1
+                    }
+                  ]
+                }
+              ],
+              "onFalse": [
+                {
+                  "code": "RES.INPUTAREA",
+                  "inputs": [
+                    {
+                      "value": "100",
+                      "weight": 1
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "created_at",
+          "javaType": "java.sql.Timestamp",
+          "dbType": "datetime",
+          "nullable": 1,
+          "length": 64,
+          "regs": [
+            {
+              "code": "REG.DATE",
+              "dateRange": [
+                1735689600000,
+                1767225599000
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
