@@ -1,0 +1,106 @@
+name: Import verified portable source (one time)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Import the SHA-256 verified v0.1.0 source archive into main
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: import-verified-portable-source
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: inputs.confirm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: v0.1.0
+      SOURCE_ASSET: faker-data-source-0.1.0.zip
+      SOURCE_SHA256: 8fdbb6947b146c326ad4f2af641ddd26a3b9da7d271a215292381a2fe6557bec
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Download only the expected draft release source asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset_id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '[.[] | select(.tag_name == env.RELEASE_TAG and .draft == true) | .assets[] | select(.name == env.SOURCE_ASSET)] | if length == 1 then .[0].id else error("Expected exactly one source asset on the draft release") end')
+          gh api -H 'Accept: application/octet-stream' "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" > "$RUNNER_TEMP/source.zip"
+          printf '%s  %s\n' "$SOURCE_SHA256" "$RUNNER_TEMP/source.zip" | sha256sum --check --strict
+      - name: Validate paths and import source files
+        shell: python
+        run: |
+          import os, pathlib, shutil, zipfile, json
+          root = pathlib.Path.cwd()
+          temporary = pathlib.Path(os.environ['RUNNER_TEMP'])
+          destination = temporary / 'verified-source'
+          with zipfile.ZipFile(temporary / 'source.zip') as archive:
+              for info in archive.infolist():
+                  parts = pathlib.PurePosixPath(info.filename).parts
+                  if not parts or parts[0] != 'faker-data' or '..' in parts or info.filename.startswith('/'):
+                      raise RuntimeError('Unexpected archive path')
+                  if (info.external_attr >> 16) & 0o170000 == 0o120000:
+                      raise RuntimeError('Symlink entries are not allowed')
+              archive.extractall(destination)
+          files = []
+          source = destination / 'faker-data'
+          for file in source.rglob('*'):
+              if not file.is_file():
+                  continue
+              relative = file.relative_to(source)
+              if relative.parts[:2] == ('.github', 'workflows'):
+                  continue
+              if any(part in ('.git', 'node_modules', 'target', 'logs', 'data', '__pycache__') for part in relative.parts):
+                  raise RuntimeError('Unexpected generated/private path')
+              target = root / relative
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(file, target)
+              files.append(relative.as_posix())
+          (temporary / 'imported-paths.json').write_text(json.dumps(files))
+          print('Imported source files:', len(files))
+      - name: Verify frontend source without replacing the shipped bundle
+        working-directory: frontend
+        shell: bash
+        run: |
+          npm ci
+          npm test
+          npm run build -- --dest "$RUNNER_TEMP/ui-check"
+      - name: Verify Java tests and executable packaging
+        shell: bash
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -Dfaker.redis.test.port=6379 verify
+      - name: Commit only the verified archive paths
+        shell: python
+        run: |
+          import json, os, pathlib, subprocess
+          files = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'imported-paths.json').read_text())
+          subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
+          subprocess.run(['git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
+          subprocess.run(['git', 'add', '--', *files], check=True)
+          changed = subprocess.run(['git', 'diff', '--cached', '--quiet']).returncode
+          if changed == 1:
+              subprocess.run(['git', 'commit', '-m', 'feat: publish portable full-stack studio and AI API guides'], check=True)
+              subprocess.run(['git', 'push', 'origin', 'HEAD:main'], check=True)
+          elif changed != 0:
+              raise RuntimeError('Could not inspect staged changes')
