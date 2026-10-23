@@ -70,7 +70,7 @@ jobs:
               relative = file.relative_to(source)
               if relative.parts[:2] == ('.github', 'workflows'):
                   continue
-              if any(part in ('.git', 'node_modules', 'target', 'logs', 'data', '__pycache__') for part in relative.parts):
+              if relative.parts[0] in ('logs', 'data') or any(part in ('.git', 'node_modules', 'target', '__pycache__') for part in relative.parts):
                   raise RuntimeError('Unexpected generated/private path')
               target = root / relative
               target.parent.mkdir(parents=True, exist_ok=True)
