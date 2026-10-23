@@ -6,6 +6,7 @@
 
 **English** · [简体中文](README.zh-CN.md) · [Download](https://github.com/yanjiajun0604-commits/faker-data/releases/latest) · [AI / API guide](AI_USAGE.en.md)
 
+[![Build and test](https://github.com/yanjiajun0604-commits/faker-data/actions/workflows/ci.yml/badge.svg)](https://github.com/yanjiajun0604-commits/faker-data/actions/workflows/ci.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-2a7d59)](LICENSE)
 [![Java 8](https://img.shields.io/badge/Java-8%2B-64796a)](pom.xml)
 [![Local first](https://img.shields.io/badge/local-first-387b61)](README.md#how-it-runs)
