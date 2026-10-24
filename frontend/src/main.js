@@ -46,17 +46,11 @@ Vue.prototype.$confirm = MessageBox.confirm
 Vue.prototype.$prompt = MessageBox.prompt
 Vue.prototype.$http = axios
 //设置axios的根请求路径
-axios.defaults.baseURL = process.env.VUE_APP_API_BASE || '/faker'
+axios.defaults.baseURL = process.env.VUE_APP_API_BASE || '/'
 
-// axios 响应拦截器 — 统一错误处理
+// 页面负责业务错误；此处只统一处理 HTTP/网络错误，避免同一请求重复提醒。
 axios.interceptors.response.use(
-  (response) => {
-    // 业务错误（code !== 0）
-    if (response.data && response.data.code !== 0) {
-      Vue.prototype.$message.error(serverMessage(response.data.msg) || t("请求失败"));
-    }
-    return response;
-  },
+  (response) => response,
   (error) => {
     // HTTP/网络错误
     let msg = t("网络错误，请稍后重试");

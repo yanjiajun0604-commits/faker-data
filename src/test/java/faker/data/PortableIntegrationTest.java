@@ -31,6 +31,7 @@ class PortableIntegrationTest {
     @Autowired FakerSchemeService schemes;
     @Autowired JdbcTemplate jdbc;
     @Autowired TestRestTemplate http;
+    @org.springframework.boot.web.server.LocalServerPort int port;
     static volatile CountDownLatch entered=new CountDownLatch(1),release=new CountDownLatch(1);
 
     @Test void savesAndUpdatesSchemesWithoutExternalDatabase(){
@@ -64,6 +65,16 @@ class PortableIntegrationTest {
         assertEquals(TaskState.NONE,tasks.query("missing").getState());
         Map<?,?> response=http.getForObject("/asyncTask/queryProcess/missing",Map.class);
         assertEquals(0,response.get("code"),response.toString());assertEquals("NONE",((Map<?,?>)response.get("data")).get("state"));
+    }
+    @Test void defaultWebUiGuidesAndApiAreAvailableAtTheRootPath(){
+        String base="http://127.0.0.1:"+port;
+        org.springframework.http.ResponseEntity<String> page=http.getForEntity(base+"/",String.class);
+        assertEquals(200,page.getStatusCodeValue());assertTrue(page.getBody().contains("<div id=\"app\"></div>"));
+        org.springframework.http.ResponseEntity<String> guide=http.getForEntity(base+"/AI_USAGE.md",String.class);
+        assertEquals(200,guide.getStatusCodeValue());assertTrue(guide.getBody().contains("http://127.0.0.1:8085"));
+        Map<?,?> response=http.getForObject(base+"/asyncTask/list",Map.class);
+        assertEquals(0,response.get("code"));
+        assertEquals(404,http.getForEntity(base+"/faker/asyncTask/list",String.class).getStatusCodeValue());
     }
     @Test void realGenerationEngineCommitsReferencesAndRollsBackFailure() throws Exception {
         String id=tasks.submit("TEST_ENGINE",Boolean.FALSE);await(id,TaskState.FINISHED);

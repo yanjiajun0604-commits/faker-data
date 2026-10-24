@@ -1,5 +1,7 @@
 # faker-data
 
+> **Access URL:** builds from the current source use `http://127.0.0.1:8085/`, without `/faker`. The already-published v0.1.0 JAR still uses `http://127.0.0.1:8085/faker/`. No new release has been published yet. See [access URLs and version compatibility](docs/access-url.md).
+
 ### Test data that belongs together.
 
 **A local visual studio for relational test data — run one JAR, define your rules, and fill your test database.**
@@ -53,7 +55,7 @@ These screenshots demonstrate the editing interface, not a recommended field map
 java -jar faker-data-0.1.0.jar
 ```
 
-3. Open **http://127.0.0.1:8085/faker/**.
+3. For the published v0.1.0 JAR, open **http://127.0.0.1:8085/faker/**. Builds from the current source use **http://127.0.0.1:8085/**.
 4. Connect your authorized test database, select existing tables, configure field rules, and generate.
 
 **The application starts without a MySQL server, Redis, Node.js, or an OpenAI API key.** Your own target database is still required to actually insert generated data. AI integration is optional; the application does not contain a built-in LLM or translate prompts on its own.

@@ -191,6 +191,38 @@ class TreeTopologyEngineTest {
 
     // ========== 辅助方法 ==========
 
+    @Test
+    void countedNodesMatchSeededRandomTopologyWithAndWithoutCodes() {
+        for(boolean codes:new boolean[]{false,true}) {
+            TreeConfig config=createConfig(codes,5,0,3,0,4);
+            config.setLayerBitWidths(Arrays.asList(2,2,2,2,2));
+            for(long seed=-12;seed<=12;seed++) {
+                assertEquals(new TreeTopologyEngine(seed).compute(config).size(),
+                        new TreeTopologyEngine(seed).count(config),"seed="+seed+", codes="+codes);
+            }
+        }
+    }
+
+    @Test
+    void countedNodesRespectReservedRootsAndSingleLayerTrees() {
+        TreeConfig config=createConfig(true,4,0,3,0,4);
+        config.setReservedRootCodes(Arrays.asList("10","20","30"));
+        config.setLayerBitWidths(Arrays.asList(2,2,2,2));
+        for(long seed=0;seed<25;seed++) {
+            assertEquals(new TreeTopologyEngine(seed).compute(config).size(),new TreeTopologyEngine(seed).count(config));
+        }
+        config.setMaxDepth(1);
+        assertEquals(3,new TreeTopologyEngine(7).count(config));
+        config.setTreeCodeEnabled(false);config.setMinRoots(0);config.setMaxRoots(0);
+        assertEquals(0,new TreeTopologyEngine(7).count(config));
+    }
+
+    @Test
+    void countingRejectsNodeCountsThatCannotFitTheGenerationIndex() {
+        TreeConfig config=createConfig(false,2,1,1,Integer.MAX_VALUE,Integer.MAX_VALUE);
+        assertThrows(IllegalArgumentException.class,()->new TreeTopologyEngine(7).count(config));
+    }
+
     private TreeConfig createConfig(boolean treeCodeEnabled, int maxDepth,
                                     int minRoots, int maxRoots, int minChildren, int maxChildren) {
         TreeConfig config = new TreeConfig();

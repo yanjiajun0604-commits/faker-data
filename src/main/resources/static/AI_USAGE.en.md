@@ -1,8 +1,10 @@
-# AI agent integration guide — faker-data 0.1.0
+# AI agent integration guide — faker-data
+
+> **Access URL:** this guide targets the current source/local test build at `http://127.0.0.1:8085`. The already-published v0.1.0 JAR still uses `http://127.0.0.1:8085/faker`; set the client's base URL explicitly when calling that older build. See [access URLs and version compatibility](docs/access-url.md).
 
 Workflow: **person → local AI agent → HTTP API → target test database**. There is no built-in LLM; the agent supplies reasoning and translates the user's authorized request into field rules.
 
-Run `java -jar faker-data-0.1.0.jar`. Default base URL: `http://127.0.0.1:8085/faker`. A cloud agent cannot reach the user's localhost; run calls through a local agent/tool. Do not expose this unauthenticated service publicly.
+Build and run a JAR from the current source. Its default base URL is `http://127.0.0.1:8085`. A cloud agent cannot reach the user's localhost; run calls through a local agent/tool. Do not expose this unauthenticated service publicly.
 
 ## Call sequence
 
@@ -67,7 +69,7 @@ When authorized, submit once:
 python examples/ai_client.py --request examples/generate-demo.json --submit --timeout 300
 ```
 
-Use `--base-url http://127.0.0.1:8095/faker` for another port. The client prints the task ID, then the terminal result. A timeout is not proof of failure: continue querying that ID, do not submit a duplicate task. A POST timeout without a received UUID is ambiguous and requires checking task records/target data before any retry.
+Use `--base-url http://127.0.0.1:8095` for another port. The client prints the task ID, then the terminal result. A timeout is not proof of failure: continue querying that ID, do not submit a duplicate task. A POST timeout without a received UUID is ambiguous and requires checking task records/target data before any retry.
 
 ## Saved schemes
 

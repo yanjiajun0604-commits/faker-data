@@ -1,0 +1,105 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const axios = require('axios');
+const compiler = require('vue-template-compiler');
+const locale = require('../src/locale-core');
+
+// Exercise the actual response interceptor and component methods without starting a browser.
+function screen(responses, language = 'en') {
+  const notices = [];
+  const requests = [];
+  const client = axios.create({ adapter: async config => {
+    requests.push(client.getUri(config));
+    const data = responses.shift();
+    if (data instanceof Error) throw data;
+    return { data, status: 200, headers: {}, config };
+  } });
+  const message = { error: text => notices.push(text), success: text => notices.push(text) };
+  const context = {
+    module: { exports: {} }, console, RuleEditor: {}, process: { env: {} },
+    t: (key, values) => locale.translate(language, key, values),
+    serverMessage: value => locale.localizeServerMessage(language, value),
+    responseMessage: (response, fallback) => locale.localizeServerResponse(language, response, fallback),
+    Vue: { prototype: { $message: message } }, axios: client,
+    languageState: { language }, setLanguage: () => {}
+  };
+  vm.createContext(context);
+  const main = fs.readFileSync(path.join(__dirname, '../src/main.js'), 'utf8');
+  vm.runInContext(main.match(/^axios\.defaults\.baseURL = .*$/m)[0], context);
+  const registration = main.match(/axios\.interceptors\.response\.use\([\s\S]*?\n\);/);
+  assert.ok(registration, 'Response interceptor registration must remain covered');
+  vm.runInContext(registration[0], context);
+  const script = compiler.parseComponent(fs.readFileSync(path.join(__dirname, '../src/components/database.vue'), 'utf8')).script.content;
+  vm.runInContext(script.replace(/^import .*;?\s*$/gm, '').replace('export default', 'module.exports ='), context);
+  const options = context.module.exports;
+  const component = { ...options.data(), $http: client, $message: message };
+  for (const [key, method] of Object.entries(options.methods)) component[key] = method.bind(component);
+  let pending;
+  component.$refs = { form: { validate: callback => { pending = Promise.resolve(callback(true)); } } };
+  return { notices, requests, component, run: async method => { component[method]('form'); await pending; } };
+}
+
+test('the default browser connection flow calls API endpoints at the origin root', async () => {
+  const state = screen([{ code: 0 }, { code: 0, data: [] }]);
+  await state.run('submitForm');
+  assert.deepEqual(state.requests, ['/db/connect/test', '/db/showTables?withSub=0']);
+});
+
+test('one failed test-connection click produces exactly one actionable notification', async () => {
+  const state = screen([{ code: 1, msg: 'Access denied for fixture-user' }]);
+  await state.run('testForm');
+  assert.equal(state.notices.length, 1);
+  assert.match(state.notices[0], /Access denied/);
+  assert.equal(state.component.connectLoading, false);
+});
+
+test('a failed table-list request does not report success or advance the wizard', async () => {
+  const state = screen([{ code: 0 }, { code: 1, msg: 'Table permission denied' }]);
+  await state.run('submitForm');
+  assert.equal(state.notices.length, 1);
+  assert.match(state.notices[0], /Table permission denied/);
+  assert.equal(state.component.step, 0);
+});
+
+test('HTTP failure is notified once and does not leave a rejected validation callback', async () => {
+  for (const method of ['testForm', 'submitForm']) {
+    const failure = Object.assign(new Error('Service unavailable'), { response: { status: 503 } });
+    const state = screen([failure]);
+    await state.run(method);
+    assert.equal(state.notices.length, 1);
+    assert.match(state.notices[0], /503/);
+    assert.equal(state.component.connectLoading, false);
+  }
+});
+
+test('successful connect advances only after the table list is available', async () => {
+  const tables = [{ name: 'fixture_table' }];
+  const state = screen([{ code: 0 }, { code: 0, data: tables }]);
+  await state.run('submitForm');
+  assert.equal(state.component.step, 1);
+  assert.deepEqual(state.component.tables, tables);
+  assert.equal(state.notices.length, 1);
+  assert.equal(state.notices[0], 'Connection successful');
+});
+
+test('generation submission failures are still reported when business-error notifications belong to the view', async () => {
+  const state = screen([{ code: 1, msg: 'Queue is full' }]);
+  await state.component.genSubmit();
+  assert.equal(state.notices.length, 1);
+  assert.equal(state.notices[0], 'Queue is full');
+  assert.equal(state.component.genLoading, false);
+});
+
+test('structured database failures retain SQL diagnostics in both interface languages', () => {
+  const response = { code: 1, msg: '数据库连接失败', error: { type: 'DATABASE_CONNECTION', reason: 'AUTHENTICATION_FAILED', sqlState: '28000', vendorCode: 1045, detail: "Access denied for user 'fixture-user'@'localhost'" } };
+  for (const language of ['en', 'zh-CN']) {
+    const message = locale.localizeServerResponse(language, response);
+    assert.match(message, /28000/);
+    assert.match(message, /1045/);
+    assert.match(message, /Access denied/);
+    assert.doesNotMatch(message, /View the full error details/);
+  }
+});
