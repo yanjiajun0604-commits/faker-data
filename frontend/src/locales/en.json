@@ -306,5 +306,9 @@
   "数据库连接或元数据访问失败，请查看下方诊断信息。": "Database connection or metadata access failed. See the diagnostics below.",
   "无法连接目标数据库，请核对连接地址、账号、密码及访问权限": "Cannot connect to the target database. Check the address, username, password and access permissions.",
   "无法读取表列表，请重新检查目标数据库连接": "Cannot read the table list. Check the target database connection.",
-  "无法读取字段，请核对表名、数据库连接及读取权限": "Cannot read fields. Check the table name, database connection and read permissions."
+  "无法读取字段，请核对表名、数据库连接及读取权限": "Cannot read fields. Check the table name, database connection and read permissions.",
+  "连接测试数据库": "Connect your test database",
+  "从一份连接，开始你的测试场景。": "Start your test scenario with a connection.",
+  "让数据彼此关联": "Keep your data connected",
+  "配置字段引用，让用户、订单和业务数据保持关联。": "Define field references to keep users, orders and business data connected."
 }

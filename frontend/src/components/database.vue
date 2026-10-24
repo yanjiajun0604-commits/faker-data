@@ -1,9 +1,9 @@
 <template>
-<div class="page-wrapper">
+<div class="page-wrapper" :class="{ 'home-view': step === 0 }">
   <aside class="studio-sidebar">
     <a class="studio-brand" href="./" :aria-label="$t(&quot;faker-data 首页&quot;)">
       <span class="brand-mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><ellipse cx="16" cy="8" rx="10" ry="4"/><path d="M6 8v8c0 2.2 4.5 4 10 4s10-1.8 10-4V8M6 16v8c0 2.2 4.5 4 10 4s10-1.8 10-4v-8"/></svg></span>
-      <span>faker<span class="brand-dot">.</span>data<small>TEST DATA STUDIO</small></span>
+      <span><span class="brand-word">faker</span><span class="brand-dot">.</span>data<small>TEST DATA STUDIO</small></span>
     </a>
     <div class="sidebar-label">{{ $t("工作空间") }} <span>WORKSPACE</span></div>
     <nav class="studio-navigation" :aria-label="$t(&quot;生成流程&quot;)">
@@ -14,21 +14,24 @@
       </div>
     </nav>
     <div class="sidebar-divider"></div>
-    <button class="sidebar-action" :disabled="step === 3" @click="useHistoryScheme"><i class="el-icon-collection"></i> {{ $t("我的生成方案") }} <i class="el-icon-top-right"></i></button>
+    <button v-if="step !== 0" class="sidebar-action" :disabled="step === 3" @click="useHistoryScheme"><i class="el-icon-collection"></i> {{ $t("我的生成方案") }} <i class="el-icon-top-right"></i></button>
     <a class="sidebar-action" :href="guideUrl" target="_blank" rel="noopener"><i class="el-icon-cpu"></i> {{ $t("让 AI 帮我生成") }} <i class="el-icon-top-right"></i></a>
     <div class="sidebar-bottom"><span class="local-indicator"></span> {{ $t("本地工作空间") }}<small>{{ $t("规则与数据，由你掌控。") }}</small><span class="sidebar-version">OPEN SOURCE · v0.1.0</span></div>
   </aside>
   <div class="studio-main">
     <header class="studio-topbar">
       <div class="workspace-breadcrumb">{{ $t("工作空间") }} <i class="el-icon-arrow-right"></i><strong>{{ stepList[Math.min(step, 3)].title }}</strong></div>
-      <div class="topbar-links"><label class="language-switch"><i class="el-icon-connection" aria-hidden="true"></i><select v-model="language" aria-label="Language / 界面语言"><option value="zh-CN">中文</option><option value="en">English</option></select></label><a :href="guideUrl" target="_blank" rel="noopener"><i class="el-icon-document"></i> {{ $t("API / AI 指南") }}</a><a href="https://github.com/yanjiajun0604-commits/faker-data" target="_blank" rel="noopener">GitHub <i class="el-icon-top-right"></i></a></div>
+      <div class="topbar-links">
+        <button v-if="step === 0" class="topbar-schemes" :disabled="step === 3" @click="useHistoryScheme"><i class="el-icon-folder-opened" aria-hidden="true"></i> {{ $t("我的生成方案") }}</button>
+        <a :href="guideUrl" target="_blank" rel="noopener"><i class="el-icon-reading" aria-hidden="true"></i> {{ $t("API / AI 指南") }}</a>
+        <a href="https://github.com/yanjiajun0604-commits/faker-data" target="_blank" rel="noopener">GitHub <i class="el-icon-top-right" aria-hidden="true"></i></a>
+        <label class="language-switch"><select v-model="language" aria-label="Language / 界面语言"><option value="zh-CN">中文</option><option value="en">English</option></select></label>
+      </div>
     </header>
     <main class="page-body">
       <section class="studio-intro" v-if="step === 0">
-        <div class="eyebrow"><span></span> BUILD SCENARIOS, NOT SCRIPTS</div>
-        <h1>{{ $t("让测试数据，") }}<br>{{ $t("为你的场景") }}<span>{{ $t("准备就绪。") }}</span></h1>
-        <p>{{ $t("连接数据库，定义规则，生成彼此关联的测试数据。") }}<br>{{ $t("从一张空表，到可验证的业务场景。") }}</p>
-        <div class="supported-databases"><span>{{ $t("支持数据库") }}</span><strong><i class="db-dot mysql"></i>MySQL</strong><strong><i class="db-dot oracle"></i>Oracle</strong><strong><i class="db-dot dm"></i>{{ $t("达梦") }}</strong></div>
+        <h1>{{ $t("连接测试数据库") }}</h1>
+        <p>{{ $t("从一份连接，开始你的测试场景。") }}</p>
       </section>
       <section class="workspace-heading" v-else><div><div class="eyebrow">YOUR DATA, YOUR RULES</div><h1>{{ step === 4 ? $t("测试数据已准备好。") : step === 5 ? $t("一起解决这个问题。") : stepList[Math.min(step,3)].title }}</h1><p>{{ step === 1 ? $t("选择需要生成数据的表，再为字段设置规则。") : step === 2 ? $t("让每个字段，都符合你的业务场景。") : $t("每一个任务，都有清晰的执行结果。") }}</p></div><span v-if="selectedTables.length" class="workspace-count">{{ selectedTables.length }} {{ $t("张目标表") }}</span></section>
     <!-- 返回上一步 -->
@@ -87,6 +90,7 @@
 :placeholder="$t(&quot;输入数据库密码&quot;)"
           ></el-input>
         </el-form-item>
+        <div class="supported-databases"><span>{{ $t("支持数据库") }}</span><strong><i class="db-dot mysql"></i>MySQL</strong><strong><i class="db-dot oracle"></i>Oracle</strong><strong><i class="db-dot dm"></i>{{ $t("达梦") }}</strong></div>
         <el-form-item>
           <el-button
             type="primary"
@@ -103,8 +107,25 @@
       </el-form>
     </el-card>
     <aside class="connection-companion">
-      <div class="scenario-note"><div class="note-eyebrow"><i class="el-icon-magic-stick"></i> MORE THAN RANDOM</div><h3>{{ $t("生成数据，") }}<br>{{ $t("也生成关系。") }}</h3><p>{{ $t("不止填满字段，更让数据之间的逻辑成立。") }}</p><div class="relationship-example" :aria-label="$t(&quot;父子表关联示意&quot;)"><div><i class="el-icon-user"></i><span>users<small>id · name · type</small></span><span class="example-count">{{ $t("父表") }}</span></div><div class="relationship-line"><span>id → user_id</span></div><div><i class="el-icon-tickets"></i><span>orders<small>user_id · amount</small></span><span class="example-count">{{ $t("子表") }}</span></div></div><span class="example-caption">{{ $t("规则示意 · 非实际数据库内容") }}</span></div>
-      <div class="connection-tips"><h4>{{ $t("一个工具，三种工作方式") }}</h4><p><i class="el-icon-mouse"></i><span><strong>{{ $t("可视化配置") }}</strong><small>{{ $t("用字段规则描述你需要的数据。") }}</small></span></p><p><i class="el-icon-refresh"></i><span><strong>{{ $t("方案复用") }}</strong><small>{{ $t("保存配置，让下一次更简单。") }}</small></span></p><p><i class="el-icon-cpu"></i><span><strong>{{ $t("AI 接口调用") }}</strong><small>{{ $t("把需求交给 AI，通过 API 完成。") }}</small></span></p></div>
+      <section class="scenario-note">
+        <h3>{{ $t("让数据彼此关联") }}</h3>
+        <p>{{ $t("配置字段引用，让用户、订单和业务数据保持关联。") }}</p>
+        <figure class="schema-preview" :aria-label="$t('父子表关联示意')">
+          <div class="schema-card schema-users">
+            <div class="schema-card__title"><i class="el-icon-s-grid" aria-hidden="true"></i><strong>users</strong></div>
+            <div class="schema-card__row"><span><i class="el-icon-key" aria-hidden="true"></i> id</span><small>VARCHAR</small></div>
+            <div class="schema-card__row"><span>name</span><small>VARCHAR</small></div>
+          </div>
+          <svg class="schema-connector" viewBox="0 0 80 90" fill="none" aria-hidden="true"><path d="M0 22H28C38 22 38 57 49 57H77"/><path d="m70 51 7 6-7 6"/></svg>
+          <div class="schema-card schema-orders">
+            <div class="schema-card__title"><i class="el-icon-s-grid" aria-hidden="true"></i><strong>orders</strong></div>
+            <div class="schema-card__row"><span><i class="el-icon-key" aria-hidden="true"></i> id</span><small>VARCHAR</small></div>
+            <div class="schema-card__row schema-card__row--reference"><span>user_id</span><small>VARCHAR</small></div>
+            <div class="schema-card__row"><span>amount</span><small>DECIMAL</small></div>
+          </div>
+          <figcaption>{{ $t("规则示意 · 非实际数据库内容") }}</figcaption>
+        </figure>
+      </section>
     </aside>
     </div>
 
