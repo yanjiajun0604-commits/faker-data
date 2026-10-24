@@ -35,3 +35,5 @@ a:focus-visible, button:focus-visible { outline: 2px solid #188b64; outline-offs
 .el-progress-bar__inner, .el-checkbox__input.is-checked .el-checkbox__inner { background: #127a55; border-color: #127a55; }
 .el-pagination.is-background .el-pager li:not(.disabled).active { background: #127a55; }
 </style>
+
+<style src="./styles/apple-workspace.css"></style>
