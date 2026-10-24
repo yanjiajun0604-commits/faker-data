@@ -1,22 +1,24 @@
 # 给 AI 的 faker-data 接口调用指南
 
-本文用于实现 **人 → AI → 本地 faker-data HTTP API → 目标测试数据库**。无需控制网页，也无需理解 Java 源码。本文对应便携版 0.1.0；旧版只含后端的快照可能没有这些运行条件。
+> **访问地址：** 本文按当前源码构建及本地测试版编写，基地址为 `http://127.0.0.1:8085`。已经发布的 v0.1.0 JAR 仍使用 `http://127.0.0.1:8085/faker`；调用该旧版时必须调整客户端基地址。版本差异见[访问地址说明](docs/access-url.md)。
+
+本文用于实现 **人 → AI → 本地 faker-data HTTP API → 目标测试数据库**。无需控制网页，也无需理解 Java 源码。本文对应当前便携版源码；旧版只含后端的快照可能没有这些运行条件。
 
 ## 1. 先确认任务和运行位置
 
 用户应明确目标测试数据库、表、生成数量、字段规则，以及是否允许向该目标写入。这些信息已明确时直接执行，不要重复确认。缺少目标或写入范围时先澄清，不能自行猜一个生产库或擅自建库、清表、删数据。
 
-用户启动：
+用户启动当前源码构建的 JAR（下例文件名按本地构建产物填写）：
 
 ```sh
 java -jar faker-data-0.1.0.jar
 ```
 
-默认基地址为 `http://127.0.0.1:8085/faker`，网页在该地址后加 `/`。应用会自动建立自己的 SQLite 状态库，不需要为应用配置 MySQL 或 Redis；但生成数据仍需目标 MySQL、Oracle 或达梦数据库及相应权限。
+默认基地址为 `http://127.0.0.1:8085`，网页在该地址后加 `/`。应用会自动建立自己的 SQLite 状态库，不需要为应用配置 MySQL 或 Redis；但生成数据仍需目标 MySQL、Oracle 或达梦数据库及相应权限。
 
 **调用接口的 AI 工具必须能访问运行程序的机器。** 云端 AI 的 `127.0.0.1` 指向云端自己，不能访问用户电脑。可以让用户的本地 AI/终端工具运行下述客户端；不要为了连通而直接将无认证接口开放到公网。
 
-使用 `GET /asyncTask/list` 检查服务，返回的 `data` 应包含 `type: "GEN_DATA"`。这不是数据库连接检查。所有下文路径都在基地址之后，不能重复加 `/faker`。
+使用 `GET /asyncTask/list` 检查服务，返回的 `data` 应包含 `type: "GEN_DATA"`。这不是数据库连接检查。所有下文路径直接接在主机与端口之后，不再增加应用路径前缀。
 
 ## 2. HTTP 和响应约定
 
@@ -234,7 +236,7 @@ python examples/ai_client.py --request examples/generate-demo.json --submit --ti
 python examples/ai_client.py --request examples/generate-tree.json --submit --timeout 300
 ```
 
-端口改变时追加 `--base-url http://127.0.0.1:8095/faker`。客户端会输出任务 ID 和终态，业务失败和等待超时以非零退出；它不会自动重提任务。示例 JSON 需要按真实元数据调整；自动化调用优先读取元数据后合并 `regs`，不要在程序里固定 JDBC 类型。
+端口改变时追加 `--base-url http://127.0.0.1:8095`。客户端会输出任务 ID 和终态，业务失败和等待超时以非零退出；它不会自动重提任务。示例 JSON 需要按真实元数据调整；自动化调用优先读取元数据后合并 `regs`，不要在程序里固定 JDBC 类型。
 
 最小导入示例：
 
@@ -243,7 +245,7 @@ import json, os, sys
 sys.path.insert(0, "examples")
 from ai_client import FakerClient
 
-client = FakerClient("http://127.0.0.1:8085/faker")
+client = FakerClient("http://127.0.0.1:8085")
 with open("examples/generate-demo.json", encoding="utf-8") as f:
     request = json.load(f)
 request["dataSource"]["password"] = os.environ["FAKER_TARGET_PASSWORD"]

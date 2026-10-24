@@ -2,13 +2,14 @@ import Vue from 'vue';
 import elementLocale from 'element-ui/lib/locale';
 import en from 'element-ui/lib/locale/lang/en';
 import zh from 'element-ui/lib/locale/lang/zh-CN';
-import { preferenceKey, resolveLanguage, formatMessage, translate, localizeServerMessage } from './locale-core';
+import { preferenceKey, resolveLanguage, formatMessage, translate, localizeServerMessage, localizeServerResponse } from './locale-core';
 
 let saved;
 try { saved = window.localStorage.getItem(preferenceKey); } catch (_) { /* Storage may be disabled. */ }
 export const languageState = Vue.observable({ language: resolveLanguage(saved, navigator.language) });
 export const t = (key, values) => translate(languageState.language, key, values);
 export const serverMessage = message => localizeServerMessage(languageState.language, message);
+export const responseMessage = (response, fallback) => localizeServerResponse(languageState.language, response, fallback);
 
 elementLocale.i18n((key, values) => {
   const pack = languageState.language === 'en' ? en : zh;

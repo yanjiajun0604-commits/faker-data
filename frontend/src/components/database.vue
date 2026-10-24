@@ -94,7 +94,7 @@
             @click="testForm('form')"
             >{{ $t("测试连接") }}</el-button
           >
-          <el-button type="success" @click="submitForm('form')"
+            <el-button type="success" :loading="connectLoading" @click="submitForm('form')"
             >{{ $t("连接并选择表") }} <i class="el-icon-right"></i></el-button
           >
           <el-button @click="resetForm">{{ $t("重置") }}</el-button>
@@ -444,7 +444,7 @@
 </template>
 
 <script>
-import { t, languageState, setLanguage, serverMessage } from "../i18n";
+import { t, languageState, setLanguage, serverMessage, responseMessage } from "../i18n";
 
 import RuleEditor from "./RuleEditor.vue";
 
@@ -653,7 +653,7 @@ export default {
           .get(`asyncTask/queryProcess/${taskId}`)
           .then(({ data: res }) => {
             if (res.code !== 0) {
-              return this.$message.error(serverMessage(res.msg));
+              return this.$message.error(responseMessage(res));
             }
             // 响应结构: { progress, state, errorMsg, result }
             const info = res.data || {};
@@ -711,7 +711,7 @@ export default {
         // 转换前端树形配置为后端 TreeConfig
         this.prepareTreeConfigs();
         let { data: res } = await this.genData();
-        if (res.code !== 0) return;
+        if (res.code !== 0) return this.$message.error(responseMessage(res));
         this.step = 3;
         this.queryTaskProcessInfo(res.data);
       } finally {
@@ -1004,7 +1004,8 @@ export default {
       // 检查同名方案，确认是否覆盖
       if (this.schemeList.length === 0) {
         let { data: res } = await this.$http.get("scheme/list");
-        if (res.code === 0) this.schemeList = res.data;
+        if (res.code !== 0) return this.$message.error(responseMessage(res));
+        this.schemeList = res.data;
       }
       const existing = this.schemeList.find((s) => s.name === schemeName);
       if (existing) {
@@ -1032,7 +1033,7 @@ export default {
           tables: this.selectedTables,
         });
         if (res.code !== 0) {
-          return this.$message.error(serverMessage(res.msg) || t("保存失败"));
+          return this.$message.error(responseMessage(res) || t("保存失败"));
         }
         this.$message.success(t("方案保存成功"));
         // 刷新列表
@@ -1051,7 +1052,7 @@ export default {
       } else {
         let { data: res } = await this.$http.get("scheme/list");
         if (res.code !== 0) {
-          return this.$message.error(serverMessage(res.msg) || t("获取方案列表失败"));
+          return this.$message.error(responseMessage(res) || t("获取方案列表失败"));
         }
         if (!res.data || res.data.length === 0) {
           return this.$message.info(t("暂无历史方案"));
@@ -1085,7 +1086,7 @@ export default {
       let { data: testRes } = await this.testConnect();
       if (testRes.code !== 0) {
         await this.$alert(
-          t("历史方案的数据库连接信息不正确，请在上方表单中修改后再次点击【选择历史方案】"),
+          responseMessage(testRes) + '\n' + t("历史方案的数据库连接信息不正确，请在上方表单中修改后再次点击【选择历史方案】"),
           t("连接失败"),
           {
             confirmButtonText: t("我知道了"),
@@ -1101,7 +1102,7 @@ export default {
     async loadSchemeConfig(scheme) {
       let { data: tablesRes } = await this.tablesLists(1);
       if (tablesRes.code !== 0) {
-        return this.$message.error(serverMessage(tablesRes.msg) || t("获取表列表失败"));
+        return this.$message.error(responseMessage(tablesRes) || t("获取表列表失败"));
       }
       const allTables = tablesRes.data || [];
       let savedTables;
@@ -1188,7 +1189,7 @@ export default {
         .then(async () => {
           let { data: res } = await this.$http.delete(`scheme/${scheme.id}`);
           if (res.code !== 0) {
-            return this.$message.error(serverMessage(res.msg) || t("删除失败"));
+            return this.$message.error(responseMessage(res) || t("删除失败"));
           }
           this.$message.success(t("删除成功"));
           this.schemeList = this.schemeList.filter((s) => s.id !== scheme.id);
@@ -1215,9 +1216,11 @@ export default {
           try {
             let { data: res } = await this.testConnect();
             if (res.code !== 0) {
-              return this.$message.error(serverMessage(res.msg));
+              return this.$message.error(responseMessage(res));
             }
             return this.$message.success(t("连接成功"));
+          } catch {
+            // HTTP/网络错误已经由 Axios 统一提示。
           } finally {
             this.connectLoading = false;
           }
@@ -1293,18 +1296,20 @@ export default {
     submitForm(formName) {
       this.$refs[formName].validate(async (valid) => {
         if (valid) {
-          let { data: res } = await this.testConnect();
-          if (res.code !== 0) {
-            return this.$message.error(serverMessage(res.msg));
+          this.connectLoading = true;
+          try {
+            let { data: res } = await this.testConnect();
+            if (res.code !== 0) return this.$message.error(responseMessage(res));
+            let { data: res2 } = await this.tablesLists(0);
+            if (res2.code !== 0) return this.$message.error(responseMessage(res2));
+            this.$message.success(t("连接成功"));
+            this.tables = res2.data;
+            this.step = 1;
+          } catch {
+            // HTTP/网络错误已经由 Axios 统一提示。
+          } finally {
+            this.connectLoading = false;
           }
-
-          let { data: res2 } = await this.tablesLists(0);
-          if (res.code !== 0) {
-            return this.$message.error(serverMessage(res.msg));
-          }
-          this.$message.success(t("连接成功"));
-          this.tables = res2.data;
-          this.step = 1;
         } else {
           return this.$message.error(t("请将信息填充完整"));
         }
@@ -1330,7 +1335,7 @@ export default {
           let obj = { name: item.name, size: 0 };
           let { data: res } = await this.columnLists(item.name);
           if (res.code !== 0) {
-            return this.$message.error(serverMessage(res.msg));
+            return this.$message.error(responseMessage(res));
           }
           obj.columns = res.data;
           this.selectedTables.push(obj);

@@ -6,6 +6,8 @@ module.exports = defineConfig({
   transpileDependencies: true,
   devServer: {
     host: '127.0.0.1',
-    proxy: { '/faker': { target: process.env.FAKER_BACKEND_URL || 'http://127.0.0.1:8085' } }
+    proxy: Object.fromEntries(['/db', '/scheme', '/publish', '/asyncTask'].map(prefix => [
+      prefix, { target: process.env.FAKER_BACKEND_URL || 'http://127.0.0.1:8085' }
+    ]))
   }
 })

@@ -15,7 +15,38 @@ import java.util.Random;
  */
 public class TreeTopologyEngine {
 
-    private final Random random = new Random();
+    private final Random random;
+
+    public TreeTopologyEngine() { random = new Random(); }
+
+    /** 独立实例使用相同种子时，计数与生成会得到同一棵树。 */
+    public TreeTopologyEngine(long seed) { random = new Random(seed); }
+
+    /**
+     * 只按 BFS 层级统计节点，不分配拓扑或节点编码。
+     * 此方法消耗随机序列，实际生成须使用具有相同初始种子的另一个实例。
+     */
+    public int count(TreeConfig config) {
+        int roots = randomInt(config.getMinRoots(), config.getMaxRoots());
+        if (config.isTreeCodeEnabled() && config.getReservedRootCodes() != null
+                && !config.getReservedRootCodes().isEmpty()) {
+            roots = config.getReservedRootCodes().size();
+        }
+        long levelCount = Math.max(0, roots);
+        long total = levelCount;
+        for (int depth = 0; levelCount > 0 && depth < config.getMaxDepth() - 1; depth++) {
+            long nextLevel = 0;
+            for (long node = 0; node < levelCount; node++) {
+                nextLevel += Math.max(0, randomInt(config.getMinChildrenPerNode(), config.getMaxChildrenPerNode()));
+                if (total + nextLevel > Integer.MAX_VALUE) {
+                    throw new IllegalArgumentException("树节点数量超过支持的上限");
+                }
+            }
+            total += nextLevel;
+            levelCount = nextLevel;
+        }
+        return (int) total;
+    }
 
     /**
      * 预计算整棵树的拓扑结构。

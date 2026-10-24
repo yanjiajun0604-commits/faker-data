@@ -2,12 +2,15 @@ package faker.data.service.db.impl;
 
 import faker.data.domain.DataSource;
 import faker.data.service.db.AbstractJdbcService;
+import faker.data.service.generate.engine.GenerationEngine;
 
 public class MySQLJdbcService extends AbstractJdbcService {
 
 	public MySQLJdbcService(DataSource dataSource) {
 		super(dataSource);
 	}
+
+    public MySQLJdbcService(DataSource dataSource, GenerationEngine engine) { super(dataSource, engine); }
 
 	@Override
 	protected String loadDriverClass() {

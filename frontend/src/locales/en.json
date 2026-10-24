@@ -295,5 +295,16 @@
   "成功": "Success",
   "保存成功": "Saved",
   "数据完整性错误": "Data integrity error",
-  "SQL 语法错误": "SQL syntax error"
+  "SQL 语法错误": "SQL syntax error",
+  "数据库登录认证失败，请核对账号、密码及来源主机授权。": "Database login failed. Check the username, password and host access rules.",
+  "数据库访问被拒绝，请核对账号的数据库访问权限。": "Database access denied. Check this account's database permissions.",
+  "目标数据库不存在，请核对 JDBC URL 中的数据库名称。": "The target database does not exist. Check the database name in the JDBC URL.",
+  "数据库连接或元数据读取超时，请检查地址、端口和网络。": "Database connection or metadata request timed out. Check the address, port and network.",
+  "数据库驱动未找到，请检查程序依赖。": "Database driver not found. Check the application dependencies.",
+  "数据库认证配置不兼容，请检查驱动、TLS 与服务端认证配置。": "Incompatible database authentication settings. Check the driver, TLS and server authentication configuration.",
+  "无法连接数据库，请检查地址、端口和数据库服务。": "Cannot connect to the database. Check the address, port and database service.",
+  "数据库连接或元数据访问失败，请查看下方诊断信息。": "Database connection or metadata access failed. See the diagnostics below.",
+  "无法连接目标数据库，请核对连接地址、账号、密码及访问权限": "Cannot connect to the target database. Check the address, username, password and access permissions.",
+  "无法读取表列表，请重新检查目标数据库连接": "Cannot read the table list. Check the target database connection.",
+  "无法读取字段，请核对表名、数据库连接及读取权限": "Cannot read fields. Check the table name, database connection and read permissions."
 }

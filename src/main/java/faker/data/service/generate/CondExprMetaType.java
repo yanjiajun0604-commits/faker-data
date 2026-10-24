@@ -2,7 +2,7 @@ package faker.data.service.generate;
 
 import faker.data.domain.ColumnInfo;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.Expression;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
@@ -36,24 +36,35 @@ public class CondExprMetaType implements IMetaType {
     public Object parse(String transId, String curTableName,
                         ColumnInfo columnInfo, Map<String, Object> extendArg) {
         MetaTypeVO reg = (MetaTypeVO) extendArg.get("currentReg");
-        String condition = reg.getCondition();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rowValues = (Map<String, Object>) extendArg.get("rowValues");
+        boolean branch = evaluate(prepare(reg), reg, rowValues);
 
+        return executeBranch(branch, reg, transId, curTableName, columnInfo, extendArg, rowValues);
+    }
+
+    /** 表达式在任务准备时解析；不使用会无限增长的全局表达式缓存。 */
+    public Expression prepare(MetaTypeVO reg) {
+        String condition = reg.getCondition();
         if (condition == null || condition.trim().isEmpty()) {
             throw new IllegalArgumentException("条件表达式不能为空");
         }
+        try {
+            return new SpelExpressionParser().parseExpression(addFunctionPrefix(condition));
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("条件表达式求值失败: " + condition, ex);
+        }
+    }
 
-        // 1. 将当前行已生成的值注入 SpEL
-        ExpressionParser parser = new SpelExpressionParser();
+    /** 每次求值隔离变量，避免条件中的赋值或多任务并发污染其他行。 */
+    public boolean evaluate(Expression expression, MetaTypeVO reg, Map<String, Object> rowValues) {
         StandardEvaluationContext ctx = new StandardEvaluationContext();
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> rowValues = (Map<String, Object>) extendArg.get("rowValues");
         if (rowValues != null) {
             // 注册原始 key 和小写别名，使 SpEL 变量查找大小写不敏感
             // 解决 Oracle/PostgreSQL 返回大写列名但用户写了小写 #字段名 的问题
             rowValues.forEach((key, value) -> {
                 ctx.setVariable(key, value);
-                String lowerKey = key.toLowerCase();
+                String lowerKey = key.toLowerCase(java.util.Locale.ROOT);
                 if (!lowerKey.equals(key)) {
                     ctx.setVariable(lowerKey, value);
                 }
@@ -65,20 +76,16 @@ public class CondExprMetaType implements IMetaType {
             provider.register(ctx);
         }
 
-        // 自动补全函数名的 # 前缀，使用户无需手动添加
-        // 例: contains(#name,'俊') -> #contains(#name,'俊')
-        String processedCondition = addFunctionPrefix(condition);
-
-        // 2. 求值（表达式使用 #字段名 引用变量，使用 #函数名(...) 调用函数）
-        Boolean result;
         try {
-            result = parser.parseExpression(processedCondition).getValue(ctx, Boolean.class);
+            Boolean result = expression.getValue(ctx, Boolean.class);
+            return Boolean.TRUE.equals(result);
         } catch (Exception e) {
-            throw new RuntimeException("条件表达式求值失败: " + condition, e);
+            throw new RuntimeException("条件表达式求值失败: " + reg.getCondition(), e);
         }
-        boolean branch = result != null && result;
+    }
 
-        // 3. 选择分支执行
+    private Object executeBranch(boolean branch, MetaTypeVO reg, String transId, String curTableName,
+                                 ColumnInfo columnInfo, Map<String, Object> extendArg, Map<String, Object> rowValues) {
         List<MetaTypeVO> rules = branch ? reg.getOnTrue() : reg.getOnFalse();
         if (rules == null || rules.isEmpty()) {
             return null;

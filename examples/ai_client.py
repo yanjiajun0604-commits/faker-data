@@ -10,7 +10,7 @@ import urllib.request
 
 
 class FakerClient:
-    def __init__(self, base_url="http://127.0.0.1:8085/faker", request_timeout=15):
+    def __init__(self, base_url="http://127.0.0.1:8085", request_timeout=15):
         self.base_url = base_url.rstrip("/") + "/"
         self.request_timeout = request_timeout
         # Local API traffic should not be sent to an environment HTTP proxy.
@@ -72,7 +72,7 @@ class FakerClient:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-url", default="http://127.0.0.1:8085/faker")
+    parser.add_argument("--base-url", default="http://127.0.0.1:8085")
     parser.add_argument("--request", required=True, help="JSON containing dataSource and tables")
     parser.add_argument("--submit", action="store_true", help="Actually submit one generation task")
     parser.add_argument("--timeout", type=float, default=300)

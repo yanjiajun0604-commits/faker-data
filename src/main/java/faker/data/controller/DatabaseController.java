@@ -9,12 +9,19 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import faker.data.service.db.DatabaseConnectionException;
 
 import faker.data.api.R;
 
 @RestController
 @RequestMapping("db")
 public class DatabaseController {
+
+    @ExceptionHandler(DatabaseConnectionException.class)
+    public R connectionFailure(DatabaseConnectionException failure) {
+        return R.error(failure.getMessage()).put("error", failure.diagnostics());
+    }
 
 
 

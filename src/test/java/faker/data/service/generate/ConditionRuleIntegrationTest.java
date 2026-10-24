@@ -1,12 +1,10 @@
 package faker.data.service.generate;
 
 import faker.data.domain.ColumnInfo;
-import faker.data.domain.DataSource;
-import faker.data.service.db.AbstractJdbcService;
+import faker.data.service.generate.engine.GenerationPlanner;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
-import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,30 +14,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * - 验证排序/循环依赖检测不依赖 Spring 上下文（纯算法测试）
  */
 class ConditionRuleIntegrationTest {
-
-    /**
-     * 创建一个不触发数据库连接、能通过 checkDataSource 校验的 AbstractJdbcService 实例。
-     * 两个 private 算法方法不依赖任何实例字段，因此使用空的匿名子类即可。
-     */
-    private static final AbstractJdbcService SERVICE = new AbstractJdbcService(createValidDataSource()) {
-        @Override
-        protected String loadDriverClass() {
-            return "com.mysql.cj.jdbc.Driver";
-        }
-
-        @Override
-        protected String schemaPattern() {
-            return null;
-        }
-    };
-
-    private static DataSource createValidDataSource() {
-        DataSource ds = new DataSource();
-        ds.setUrl("jdbc:mysql://localhost:3306/test");
-        ds.setUsername("root");
-        ds.setPassword("root");
-        return ds;
-    }
 
     @Test
     void testSortByConditionDeps_simpleDependency() {
@@ -69,7 +43,7 @@ class ConditionRuleIntegrationTest {
         columns.add(discount);
         columns.add(userType);
 
-        // 通过反射调用 sortColumnsByConditionDeps（绕过 Spring 上下文）
+        // 直接验证计划器的排序结果
         List<ColumnInfo> sorted = invokeSort(columns);
 
         // user_type 应在 discount 之前
@@ -152,29 +126,11 @@ class ConditionRuleIntegrationTest {
         assertEquals(2, refs.size());
     }
 
-    // ---- 反射辅助方法 ----
-
-    @SuppressWarnings("unchecked")
     private List<ColumnInfo> invokeSort(List<ColumnInfo> columns) {
-        try {
-            Method method = AbstractJdbcService.class.getDeclaredMethod(
-                    "sortColumnsByConditionDeps", List.class);
-            method.setAccessible(true);
-            return (List<ColumnInfo>) method.invoke(SERVICE, columns);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        return new GenerationPlanner().sortColumnsByConditionDeps(columns);
     }
 
-    @SuppressWarnings("unchecked")
     private Set<String> invokeExtractRefs(ColumnInfo columnInfo) {
-        try {
-            Method method = AbstractJdbcService.class.getDeclaredMethod(
-                    "extractConditionRefs", ColumnInfo.class);
-            method.setAccessible(true);
-            return (Set<String>) method.invoke(SERVICE, columnInfo);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        return new GenerationPlanner().extractConditionRefs(columnInfo);
     }
 }

@@ -1,8 +1,6 @@
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
   port: ${SERVER_PORT:8085}
-  servlet:
-    context-path: /faker
 spring:
   application:
     name: faker-data
