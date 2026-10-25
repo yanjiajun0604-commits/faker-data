@@ -1,6 +1,6 @@
 # faker-data · 测试数据，不止随机
 
-> **访问地址：** 当前源码构建及本地测试版使用 `http://127.0.0.1:8085/`，不再需要 `/faker`。已经发布的 v0.1.0 JAR 仍使用 `http://127.0.0.1:8085/faker/`；尚未发布新版本。版本差异见[访问地址说明](docs/access-url.md)。
+> **访问地址：** v0.1.1 与当前源码使用 `http://127.0.0.1:8085/`，不再需要 `/faker`。旧版 v0.1.0 JAR 仍使用 `http://127.0.0.1:8085/faker/`。版本差异见[访问地址说明](docs/access-url.md)。
 
 [English](README.md) · **简体中文** · [下载可执行版](https://github.com/yanjiajun0604-commits/faker-data/releases/latest) · [AI 调用指南](AI_USAGE.md)
 
@@ -8,7 +8,7 @@
 
 给用户表生成人名和手机号很容易；让订单引用正确的用户，让组织形成一棵树，让不同类型的用户享有不同折扣，才是真正的测试场景。faker-data 把这些关系和规则放进一个本地可视化工作台，也让 AI 能通过 HTTP 接口完成同样的流程。
 
-![faker-data 实际工作台](docs/images/studio-desktop.jpg)
+![faker-data 实际首页](docs/images/homepage-a-desktop.jpg)
 
 ### 你可以用它做什么？
 
@@ -62,10 +62,10 @@ chmod +x mvnw run.sh
 ./run.sh
 ```
 
-首次启动脚本使用 Maven Wrapper 下载公开构建依赖并打包；完成后打开 **http://127.0.0.1:8085/**。后续启动复用已生成的 JAR。已发布的 v0.1.0 JAR 也可直接运行，但该旧版仍需访问 `/faker/`：
+首次启动脚本使用 Maven Wrapper 下载公开构建依赖并打包；完成后打开 **http://127.0.0.1:8085/**。后续启动复用已生成的 JAR。也可直接下载 v0.1.1 JAR 运行，旧版 v0.1.0 仍需访问 `/faker/`：
 
 ```sh
-java -jar faker-data-0.1.0.jar
+java -jar faker-data-0.1.1.jar
 ```
 
 端口占用时，无需编辑配置文件：
@@ -121,7 +121,7 @@ Redis 模式启动时检查连接；每任务一个 `faker:reference:<taskId>` �
 ```powershell
 .\mvnw.cmd test
 .\mvnw.cmd package
-java -jar target/faker-data-0.1.0.jar
+java -jar target/faker-data-0.1.1.jar
 ```
 
 前端源代码位于 `frontend/`，已构建的静态文件位于 `src/main/resources/static/`。仅修改后端时不需要 Node.js；修改前端时使用 Node.js/npm：

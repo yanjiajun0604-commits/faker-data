@@ -1,7 +1,7 @@
 @echo off
 setlocal
 pushd "%~dp0"
-if not exist "target\faker-data-0.1.0.jar" (
+if not exist "target\faker-data-0.1.1.jar" (
   call mvnw.cmd -B -DskipTests package
   if errorlevel 1 (
     popd
@@ -9,7 +9,7 @@ if not exist "target\faker-data-0.1.0.jar" (
   )
 )
 echo Open http://127.0.0.1:8085/ ^(or your SERVER_PORT^)
-java -jar "target\faker-data-0.1.0.jar" %*
+java -jar "target\faker-data-0.1.1.jar" %*
 set "FAKER_EXIT=%ERRORLEVEL%"
 popd
 exit /b %FAKER_EXIT%

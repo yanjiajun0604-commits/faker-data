@@ -1,6 +1,6 @@
 # AI agent integration guide — faker-data
 
-> **Access URL:** this guide targets the current source/local test build at `http://127.0.0.1:8085`. The already-published v0.1.0 JAR still uses `http://127.0.0.1:8085/faker`; set the client's base URL explicitly when calling that older build. See [access URLs and version compatibility](docs/access-url.md).
+> **Access URL:** this guide targets v0.1.1 and current source builds at `http://127.0.0.1:8085`. Older v0.1.0 JARs retain `http://127.0.0.1:8085/faker`; set the client's base URL explicitly when calling that older build. See [access URLs and version compatibility](docs/access-url.md).
 
 Workflow: **person → local AI agent → HTTP API → target test database**. There is no built-in LLM; the agent supplies reasoning and translates the user's authorized request into field rules.
 

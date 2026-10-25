@@ -16,7 +16,7 @@
     <div class="sidebar-divider"></div>
     <button v-if="step !== 0" class="sidebar-action" :disabled="step === 3" @click="useHistoryScheme"><i class="el-icon-collection"></i> {{ $t("我的生成方案") }} <i class="el-icon-top-right"></i></button>
     <a class="sidebar-action" :href="guideUrl" target="_blank" rel="noopener"><i class="el-icon-cpu"></i> {{ $t("让 AI 帮我生成") }} <i class="el-icon-top-right"></i></a>
-    <div class="sidebar-bottom"><span class="local-indicator"></span> {{ $t("本地工作空间") }}<small>{{ $t("规则与数据，由你掌控。") }}</small><span class="sidebar-version">OPEN SOURCE · v0.1.0</span></div>
+    <div class="sidebar-bottom"><span class="local-indicator"></span> {{ $t("本地工作空间") }}<small>{{ $t("规则与数据，由你掌控。") }}</small><span class="sidebar-version">OPEN SOURCE · v0.1.1</span></div>
   </aside>
   <div class="studio-main">
     <header class="studio-topbar">
