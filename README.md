@@ -1,6 +1,6 @@
 # faker-data
 
-> **Access URL:** builds from the current source use `http://127.0.0.1:8085/`, without `/faker`. The already-published v0.1.0 JAR still uses `http://127.0.0.1:8085/faker/`. No new release has been published yet. See [access URLs and version compatibility](docs/access-url.md).
+> **Access URL:** v0.1.1 and current source builds use `http://127.0.0.1:8085/`, without `/faker`. Older v0.1.0 downloads retain `http://127.0.0.1:8085/faker/`. See [access URLs and version compatibility](docs/access-url.md).
 
 ### Test data that belongs together.
 
@@ -15,7 +15,7 @@
 
 Random names are useful. Orders linked to the right users, a department tree with valid parents, and discounts that follow membership rules are useful **together**. faker-data lets you describe those scenarios in a visual workspace and write the generated rows into your existing test tables.
 
-![The actual faker-data workspace](docs/images/studio-desktop.jpg)
+![The actual faker-data homepage](docs/images/homepage-a-desktop.jpg)
 
 ## From empty tables to useful scenarios
 
@@ -48,14 +48,14 @@ These screenshots demonstrate the editing interface, not a recommended field map
 
 ## Run it. No source build required.
 
-1. Download `faker-data-0.1.0.jar` from [Releases](https://github.com/yanjiajun0604-commits/faker-data/releases).
+1. Download `faker-data-0.1.1.jar` from [Releases](https://github.com/yanjiajun0604-commits/faker-data/releases).
 2. With Java installed (Java 8 verified), run:
 
 ```sh
-java -jar faker-data-0.1.0.jar
+java -jar faker-data-0.1.1.jar
 ```
 
-3. For the published v0.1.0 JAR, open **http://127.0.0.1:8085/faker/**. Builds from the current source use **http://127.0.0.1:8085/**.
+3. Open **http://127.0.0.1:8085/**. Older v0.1.0 downloads use `/faker/`; v0.1.1 uses the root URL.
 4. Connect your authorized test database, select existing tables, configure field rules, and generate.
 
 **The application starts without a MySQL server, Redis, Node.js, or an OpenAI API key.** Your own target database is still required to actually insert generated data. AI integration is optional; the application does not contain a built-in LLM or translate prompts on its own.
@@ -95,7 +95,7 @@ The default queue has 2 workers and 100 waiting slots. The memory reference cach
 Optional Redis mode can offload reference values:
 
 ```sh
-java -jar faker-data-0.1.0.jar --faker.cache.backend=redis --faker.cache.redis-host=127.0.0.1 --faker.cache.redis-port=6379
+java -jar faker-data-0.1.1.jar --faker.cache.backend=redis --faker.cache.redis-host=127.0.0.1 --faker.cache.redis-port=6379
 ```
 
 Redis mode still uses a **single-process task queue**, not distributed scheduling. See [configuration and design](docs/portable-design.md) and the [Chinese configuration table](README.zh-CN.md#内存缓存和可选-redis) for environment variables.
@@ -103,7 +103,7 @@ Redis mode still uses a **single-process task queue**, not distributed schedulin
 Change the port without rebuilding the frontend:
 
 ```sh
-java -jar faker-data-0.1.0.jar --server.port=8095
+java -jar faker-data-0.1.1.jar --server.port=8095
 ```
 
 ## Build from source
@@ -128,7 +128,7 @@ The start script builds the JAR with Maven Wrapper if it is absent, then runs it
 ```sh
 ./mvnw test
 ./mvnw package
-java -jar target/faker-data-0.1.0.jar
+java -jar target/faker-data-0.1.1.jar
 ```
 
 To rebuild the UI (Node.js and npm required):
