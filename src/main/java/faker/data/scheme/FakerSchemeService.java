@@ -17,7 +17,7 @@ public class FakerSchemeService {
     private FakerSchemeRepository repository;
 
     public FakerScheme save(String name, DataSource dataSource, List<TableVO> tables) {
-        return repository.upsert(name, JSON.toJSONString(dataSource), JSON.toJSONString(tables));
+        return repository.upsert(name,JSON.toJSONString(dataSource),JSON.toJSONString(tables));
     }
 
     public List<FakerScheme> listAll() {

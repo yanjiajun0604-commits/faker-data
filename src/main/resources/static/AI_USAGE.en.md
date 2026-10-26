@@ -42,9 +42,9 @@ Supported target types are MYSQL, ORACLE, DM. The URL, user and password must be
 | STRUCT.TREE_PARENT | parent value from the table's tree configuration |
 | STRUCT.TREE_CODE / REG.TREE_CODE | hierarchical code from enabled tree configuration |
 
-Multiple rules concatenate output. Missing rules usually yield NULL. Preserve strings for UUIDs and phone-like values. Use string candidates such as "12.50" for DECIMAL constants. Unsupported binary/JDBC Java types fail rather than silently generating values.
+Multiple rules concatenate output. Missing rules usually yield NULL. Preserve strings for UUIDs and phone-like values. Use string candidates such as "12.50" for DECIMAL constants. Binary values require an enabled EXT.FIELD returning byte[]; ordinary text rules do not generate binary. Unknown JDBC Java types fail rather than silently generating values.
 
-Cross-table references read rows generated in the **same task**, not existing database rows. Include the parent table, a nonempty parent row count and an actual rule for the referenced column. Dependencies are sorted automatically; cycles are rejected. Use top-level cross-table reference rules; nested conditional cross-table dependency discovery is not complete. Let the engine set depended/refOtherTables.
+Cross-table references read generated rows or source tables configured with `existingData` in the **same request**. The current source adds [existing datasets and parent-row expansion](docs/existing-data.en.md); these extensions are not included in older JARs. References need a nonempty source and usable field values. Dependencies, including nested conditional references, are sorted automatically; cycles are rejected. Let the engine set depended/refOtherTables.
 
 Conditions use `#column` variables, usually string-valued during row generation. Prefer helper functions such as `#between(#age,18,60)` for numeric ranges. Example: `condition:"#kind == 'vip'"` with constant 80 and 100 branches. See the [full guide](AI_USAGE.md) and [SpEL helpers](docs/spel-functions-guide.md).
 
@@ -55,6 +55,7 @@ Tree requests need `treeConfig` plus explicit STRUCT.TREE_PARENT / STRUCT.TREE_C
 - [Sample MySQL schema](examples/mysql-demo-schema.sql): create only in a separately authorized test database.
 - [Relational request](examples/generate-demo.json): 20 parents / 50 children, same-row reference, conditional values, BIGINT, DECIMAL, dates.
 - [Tree request](examples/generate-tree.json): one 7-node tree.
+- [Document data recipe](docs/document-recipes.en.md): exact 50/20/100 state counts, shared keys and related lines, using [its own schema](examples/mysql-document-schema.sql). Includes current capability boundaries; does not create operational workflow instances.
 - [Python standard-library client](examples/ai_client.py): check, connect, tables, columns, submit, status, wait; never retries submission.
 
 Adjust the examples to the actual target metadata. Set FAKER_TARGET_PASSWORD securely; do not commit real credentials. Inspect first:
@@ -77,6 +78,10 @@ POST /scheme/save takes `{name,dataSource,tables}` and returns a numeric ID. Sam
 
 ## Completion and failure
 
-The task runs INSERTs in a single target JDBC transaction. Transactional tables are required for atomic rollback (e.g. InnoDB). No idempotency key or automatic duplicate prevention exists. Restart marks unfinished tasks ERROR and does not replay their arguments. Redis is an optional reference cache, not a distributed queue. There is no cancel endpoint.
+The normal GEN_DATA task runs INSERTs in a single target JDBC transaction. Transactional tables are required for atomic rollback (e.g. InnoDB). GEN_DATA has no idempotency key or automatic duplicate prevention. Restart marks unfinished tasks ERROR and does not replay their arguments. Redis is an optional reference cache, not a distributed queue. There is no cancel endpoint.
 
 Report task ID, final state, requested scope, and any actual row-count/reference/constraint checks. The API does not return verified per-table counts or execute arbitrary SELECTs; use a separately authorized database query tool if needed, and state when data-level checks have not been performed. Protect the local data directory and do not expose credentials in logs or reports.
+
+## Complex fields: local advanced extensions
+
+Current source supports an optional `EXT.FIELD` rule inside ordinary `GEN_DATA`, disabled by default. Ordinary fields use existing rules; only unsupported fields invoke trusted local code using the generated context. Extensions cannot return tables, add records or overwrite ordinary fields. See [local field extensions](docs/local-extensions.en.md). Saved schemes retain the Use flow. There is no state-group engine. A separate [stdio MCP adapter](docs/mcp.en.md) connects AI clients; unknown binary formats are not automatically decoded.

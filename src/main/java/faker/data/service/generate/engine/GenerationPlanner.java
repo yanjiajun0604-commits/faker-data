@@ -2,7 +2,6 @@ package faker.data.service.generate.engine;
 
 import faker.data.domain.*;
 import faker.data.service.generate.*;
-import faker.data.service.generate.ref.RefOtherTableMetaType;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -30,29 +29,55 @@ public final class GenerationPlanner {
 
         //1.构建图
         for (TableVO tableVO : tables) {
+            ParentRowsConfig parent=tableVO.getParentRows();
+            if(parent!=null) {
+                if(tableVO.getExistingData()!=null || tableVO.getTreeConfig()!=null)
+                    throw new IllegalArgumentException("parentRows cannot use existingData or treeConfig");
+                if(parent.getRowsPerParent()==null || parent.getRowsPerParent()<1 || parent.getRowsPerParent()>10000)
+                    throw new IllegalArgumentException("parentRows.rowsPerParent must be between 1 and 10000");
+                TableVO source=parent.getTable()==null?null:tableMap.get(parent.getTable().toLowerCase(Locale.ROOT));
+                if(source==null)throw new IllegalArgumentException("Unknown parentRows table");
+                source.getRefOtherTables().add(tableVO.getName());
+                // 筛选表达式使用父记录上下文，同一行的值由引用缓存统一保存。
+                if(parent.getCondition()!=null && !parent.getCondition().trim().isEmpty())source.getColumns().forEach(c->c.setDepended(true));
+            }
             for (ColumnInfo column : tableVO.getColumns()) {
                 List<MetaTypeVO> allRegs = column.getRegs();
                 if (allRegs == null || allRegs.isEmpty()) {
                     continue;
                 }
-                for (MetaTypeVO reg : allRegs) {
-                    IMetaType metaTypeImpl = MetaTypeFactory.getMetaTypeImpl(reg);
+                visitRules(allRegs, reg -> {
+                    if(reg.getRefMatch()!=null && !"REF.OTHER_TABLE".equals(reg.getCode()))
+                        throw new IllegalArgumentException("refMatch requires REF.OTHER_TABLE");
                     String[] refArr = reg.getRefOtherTableColumn();
-                    if (metaTypeImpl instanceof RefOtherTableMetaType && refArr != null && refArr.length == 2) {
+                    if ("REF.OTHER_TABLE".equals(reg.getCode())) {
+                        if(refArr==null || refArr.length!=2 || refArr[0]==null || refArr[1]==null)
+                            throw new IllegalArgumentException("REF.OTHER_TABLE requires a table and column");
                         TableVO refTab = tableMap.get(refArr[0].toLowerCase(Locale.ROOT));
-                        if (refTab != null) {
-                            refTab.getRefOtherTables().add(tableVO.getName());
-                            String refCol = refArr[1].toLowerCase(Locale.ROOT);
-                            ColumnInfo columnInfo = refTab.getColumns().stream()
-                                    .filter(col -> col.getName().toLowerCase(Locale.ROOT).equals(refCol))
-                                    .findFirst().orElse(null);
-                            if (columnInfo != null) {
-                                //该字段被依赖，因此当存储数据时，在缓存中保存一份
-                                columnInfo.setDepended(true);
-                            }
+                        if (refTab == null)throw new IllegalArgumentException("Unknown referenced table: "+refArr[0]);
+                        refTab.getRefOtherTables().add(tableVO.getName());
+                        String refCol = refArr[1].toLowerCase(Locale.ROOT);
+                        ColumnInfo columnInfo = refTab.getColumns().stream()
+                                .filter(col -> col.getName().toLowerCase(Locale.ROOT).equals(refCol))
+                                .findFirst().orElse(null);
+                        if (columnInfo != null) {
+                            columnInfo.setDepended(true);
+                        } else throw new IllegalArgumentException("Unknown referenced column: "+refArr[1]);
+                        if(reg.getRefMatch()!=null) {
+                            new ReferenceLookup(reg);
+                            reg.getRefMatch().forEach((source,binding)->{
+                                ColumnInfo matchColumn=refTab.getColumns().stream().filter(c->c.getName().equalsIgnoreCase(source)).findFirst()
+                                    .orElseThrow(()->new IllegalArgumentException("Unknown refMatch source column: "+source));
+                                matchColumn.setDepended(true);
+                                if(binding.containsKey("field")) {
+                                    String target=(String)binding.get("field");
+                                    if(tableVO.getColumns().stream().noneMatch(c->c.getName().equalsIgnoreCase(target)))
+                                        throw new IllegalArgumentException("Unknown refMatch target column: "+target);
+                                }
+                            });
                         }
                     }
-                }
+                });
             }
         }
 
@@ -91,6 +116,15 @@ public final class GenerationPlanner {
         }
 
         return res;
+    }
+
+    private void visitRules(List<MetaTypeVO> rules,java.util.function.Consumer<MetaTypeVO> visitor) {
+        if(rules==null)return;
+        for(MetaTypeVO rule:rules) {
+            visitor.accept(rule);
+            visitRules(rule.getOnTrue(),visitor);
+            visitRules(rule.getOnFalse(),visitor);
+        }
     }
 
 
@@ -199,6 +233,8 @@ public final class GenerationPlanner {
             if (reg.getRefSelfColumn() != null) {
                 refs.add(reg.getRefSelfColumn());
             }
+            if(reg.getRefMatch()!=null)for(Map<String,Object> binding:reg.getRefMatch().values())
+                if(binding!=null && binding.get("field") instanceof String)refs.add((String)binding.get("field"));
             // 递归处理嵌套条件
             extractConditionRefsRecursive(reg.getOnTrue(), refs);
             extractConditionRefsRecursive(reg.getOnFalse(), refs);

@@ -30,6 +30,7 @@
           >{{ $t("手机号") }}</el-radio
         >
         <p class="rule-desc">{{ $t("生成中国大陆11位手机号") }}</p>
+        <el-radio v-model="localItem.code" :label="null" border>{{ $t('空值') }}</el-radio>
       </el-tab-pane>
       <el-tab-pane :label="$t(&quot;规则变量&quot;)" name="reg">
         <el-radio v-model="localItem.code" label="REG.RANGE_NUM" border
@@ -219,6 +220,18 @@
               clearable
               v-model="localItem.refOtherTableColumn"
             ></el-cascader>
+            <p class="rule-desc">{{ $t("高级匹配条件（JSON，可选）") }}</p>
+            <el-input type="textarea" :rows="4" v-model="refMatchText"
+              placeholder='{"document_id":{"field":"document_id"},"role":{"value":"INPUT"}}' />
+            <p class="rule-desc">{{ $t("field 引用本行字段，value 为固定值；留空按原方式轮转引用。") }}</p>
+            <el-select v-model="localItem.refOnMissing" :placeholder="$t('无匹配时')" clearable>
+              <el-option :label="$t('报错（默认）')" value="ERROR" />
+              <el-option :label="$t('返回空值')" value="NULL" />
+            </el-select>
+            <el-select v-model="localItem.refOnMultiple" :placeholder="$t('多条匹配时')" clearable>
+              <el-option :label="$t('报错（默认）')" value="ERROR" />
+              <el-option :label="$t('取第一条')" value="FIRST" />
+            </el-select>
           </el-tab-pane>
         </el-tabs>
       </el-tab-pane>
@@ -392,6 +405,12 @@
           </el-form>
         </div>
       </el-tab-pane>
+      <el-tab-pane :label="$t('字段扩展')" name="extension">
+        <p class="rule-desc">{{ $t('仅在现有规则无法生成本字段时使用已安装的可信本地扩展。') }}</p>
+        <el-input v-model="localItem.extension" :placeholder="$t('扩展标识，如 binary-codec')" />
+        <p>{{ $t('字段参数（JSON 对象）') }}</p>
+        <el-input type="textarea" :rows="8" v-model="extensionParametersText" />
+      </el-tab-pane>
     </el-tabs>
   </span>
   <span slot="footer" class="dialog-footer">
@@ -432,6 +451,8 @@ export default {
   data() {
     return {
       activeRuleTab: "fixed",
+      extensionParametersText: "{}",
+      refMatchText: "",
       activeRefTab: "self",
       localItem: {},
       props: {
@@ -464,6 +485,8 @@ export default {
         // 与空 item 模板合并，确保所有字段（inputs、dateRange 等）都存在，
         // 避免从其他规则切换到"手动输入"时出现 undefined 报错
         this.localItem = { ...this.createEmptyItem(), ...cloned };
+        this.extensionParametersText = JSON.stringify(this.localItem.extensionParameters || {}, null, 2);
+        this.refMatchText = this.localItem.refMatch ? JSON.stringify(this.localItem.refMatch, null, 2) : '';
         // 深拷贝表级树形配置（不存在则用默认对象，保证模板不访问 null）
         this.localTreeConfig = this.treeConfig
           ? JSON.parse(JSON.stringify(this.treeConfig))
@@ -473,7 +496,9 @@ export default {
         this.activeRuleTab = "fixed";
         this.activeRefTab = "self";
         if (code) {
-          if (code.startsWith("FIX.")) {
+          if (code === 'EXT.FIELD') {
+            this.activeRuleTab = 'extension';
+          } else if (code.startsWith("FIX.")) {
             this.activeRuleTab = "fixed";
           } else if (code.startsWith("REG.")) {
             this.activeRuleTab = "reg";
@@ -696,6 +721,7 @@ export default {
     },
 
     condRuleLabel(code) {
+      if (code === null || typeof code === 'undefined') return t('空值');
       const map = {
         'FIX.UUID': 'UUID',
         'FIX.PEOPLE_NAME': t("人名"),
@@ -715,6 +741,16 @@ export default {
     },
 
     handleOk() {
+      if (this.localItem.code === null && this.activeRuleTab === 'fixed') { this.emitSave(); return; }
+      if (this.activeRuleTab === 'extension') {
+        if (!/^[A-Za-z0-9_-]{1,80}$/.test(this.localItem.extension || '')) return this.$message.warning(t('请填写有效的扩展标识'));
+        try {
+          const parameters = JSON.parse(this.extensionParametersText);
+          if (!parameters || Array.isArray(parameters) || typeof parameters !== 'object') throw new Error('Object required');
+          this.$emit('save', { code: 'EXT.FIELD', extension: this.localItem.extension, extensionParameters: parameters });
+        } catch (_) { this.$message.warning(t('字段参数必须是有效的 JSON 对象')); }
+        return;
+      }
       // 树形编码 tab：localItem.code 由 emitSave 自动设置为 STRUCT.TREE_PARENT，无需用户选
       if (this.activeRuleTab === 'struct') {
         this.emitSave();
@@ -786,6 +822,19 @@ export default {
         return;
       }
 
+      if (this.localItem.code === 'REF.OTHER_TABLE') {
+        try {
+          const match = this.refMatchText.trim() ? JSON.parse(this.refMatchText) : null;
+          if (match !== null && (Array.isArray(match) || typeof match !== 'object' || !Object.keys(match).length)) throw new Error('Object required');
+          this.localItem.refMatch = match;
+          this.localItem.refOnMissing = match ? (this.localItem.refOnMissing || null) : null;
+          this.localItem.refOnMultiple = match ? (this.localItem.refOnMultiple || null) : null;
+        } catch (_) { return this.$message.warning(t('匹配条件必须是有效的非空 JSON 对象，或留空')); }
+      } else {
+        this.localItem.refMatch = null;
+        this.localItem.refOnMissing = null;
+        this.localItem.refOnMultiple = null;
+      }
       this.$emit('save', { ...this.localItem });
       // 非 struct tab 不再发射 tree-config-change，避免误覆盖已有 treeConfig
     },

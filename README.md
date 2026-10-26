@@ -1,5 +1,8 @@
 # faker-data
 
+Current-source preview: [AI MCP setup](docs/mcp.en.md), exact correlated references, and a portable [order demo](examples/create-order-schemes.py). These changes are not included in older release JARs.
+
+
 > **Access URL:** v0.1.1 and current source builds use `http://127.0.0.1:8085/`, without `/faker`. Older v0.1.0 downloads retain `http://127.0.0.1:8085/faker/`. See [access URLs and version compatibility](docs/access-url.md).
 
 ### Test data that belongs together.
@@ -29,6 +32,8 @@ Random names are useful. Orders linked to the right users, a department tree wit
 | An AI-driven workflow | Let a local AI agent inspect metadata, prepare rules, submit a task, and poll the HTTP API |
 
 Supports **MySQL, Oracle, and Dameng** as target databases. Switch between **English and 简体中文** in the top-right language selector. Your choice is remembered, and changing language preserves the current connection, rules and running task. The default follows your browser language. English documentation, JSON examples, and an English API guide are included.
+
+Current source also includes opt-in [local field extensions](docs/local-extensions.en.md): ordinary fields use existing rules, while only complex fields invoke trusted local code. Saved schemes retain the Use flow and field editor. A [stdio MCP adapter](docs/mcp.en.md) calls the same engine. Target-specific acceptance testing is required.
 
 
 ## A closer look
@@ -74,6 +79,8 @@ metadata → generation rules → task ID → confirmed completion
 ```
 
 Complete examples: [relational data](examples/generate-demo.json), [tree data](examples/generate-tree.json), [MySQL sample schema](examples/mysql-demo-schema.sql), and a [standard-library Python client](examples/ai_client.py). These examples target their own demo tables; inspect your actual schema before using them elsewhere.
+
+For a configuration-only document example with exact state counts, shared keys and line items, see [document data recipes](docs/document-recipes.en.md). State labels do not create operational workflow instances. Current source also adds [existing-data references and parent expansion](docs/existing-data.en.md) through JSON configuration.
 
 ## Rules that fit real test cases
 

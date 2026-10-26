@@ -7,6 +7,8 @@ public class FakerScheme {
     private String name;
     private String dataSourceJson;
     private String tablesJson;
+    private String kind;
+    private String extensionJson;
     private Date createdAt;
     private Date updatedAt;
 }

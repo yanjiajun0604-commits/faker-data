@@ -1,5 +1,8 @@
 # faker-data · 测试数据，不止随机
 
+当前源码新增：[AI MCP 接入](docs/mcp.md)、按条件精确引用，以及通用[订单示例](examples/create-order-schemes.py)。旧版已发布 JAR 不包含这些改动。
+
+
 > **访问地址：** v0.1.1 与当前源码使用 `http://127.0.0.1:8085/`，不再需要 `/faker`。旧版 v0.1.0 JAR 仍使用 `http://127.0.0.1:8085/faker/`。版本差异见[访问地址说明](docs/access-url.md)。
 
 [English](README.md) · **简体中文** · [下载可执行版](https://github.com/yanjiajun0604-commits/faker-data/releases/latest) · [AI 调用指南](AI_USAGE.md)
@@ -46,6 +49,10 @@
 - **只想使用工具：** 在 [Releases](https://github.com/yanjiajun0604-commits/faker-data/releases) 下载可执行 JAR，无需编译前端或后端。
 - **希望查看或修改代码：** 本仓库包含 Java 后端、Vue 前端、测试、构建脚本和 MIT 许可证。
 - **希望让 AI 操作：** 阅读 [AI_USAGE.md](AI_USAGE.md)，使用附带 JSON 示例和零第三方依赖的 Python 客户端。
+
+[通用单据配置示例](docs/document-recipes.md) 演示精确状态数量、共享主键和主子表关联，全部使用现有规则。示例状态不代表已创建可运行的工作流实例。 当前源码还新增[已有数据引用与父记录展开](docs/existing-data.md)，通过 JSON 配置使用。
+
+当前源码支持默认关闭的[字段级本地扩展](docs/local-extensions.md)：普通字段使用现有规则，仅复杂字段调用可信本地代码。方案沿用“使用”入口及字段编辑器，可通过 [stdio MCP 适配器](docs/mcp.md) 调用同一引擎，仍需针对目标系统验收。
 
 ## 快速开始
 
