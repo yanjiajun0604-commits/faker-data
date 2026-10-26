@@ -8,8 +8,10 @@ import java.util.*;
 public final class GenerationBatchRecorder implements JdbcBatchWriter.Observer {
     private final GenerationBatchStore store;private final String batch;
     private final TargetRowSnapshot table;
+    private final List<OwnershipJournal.Relation> direct;
     private final List<Map<String,String>> keys=new ArrayList<>();private int count;
-    public GenerationBatchRecorder(GenerationBatchStore store,String batch,String table){this.store=store;this.batch=batch;this.table=store.descriptor(batch,table);}
+    public GenerationBatchRecorder(GenerationBatchStore store,String batch,String table){this.store=store;this.batch=batch;this.table=store.descriptor(batch,table);this.direct=store.ownership().direct(batch,this.table);}
+    @Override public void beforeWrite(Connection connection) throws SQLException {store.ownership().beforeWrite(batch,connection,direct,keys);}
     @Override public void row(Object[] values){count++;if(table.unsupportedReason==null)keys.add(table.inputKey(values));}
     @Override public void written(Connection connection) throws SQLException {
         List<TargetRowSnapshot.Row> observed=table.unsupportedReason==null?table.read(connection,keys):Collections.emptyList();

@@ -2,7 +2,7 @@
 
 [中文](batch-cleanup.md)
 
-Cleanup covers original inserted rows explicitly owned by the generation journal. Older/untracked data, read-only candidates, pre-existing rows and later weakly linked business-created rows are not adopted. Later derived-record ownership is separate; cleaning original inserts is not proof of an entirely traceless business scenario.
+By default cleanup covers original tracked inserts. Optional [declared later-derived ownership](derived-ownership.en.md), configured before generation, can add bounded new descendants after freshness/reference checks. Older/untracked data, read-only sources and pre-existing candidates are never adopted. This is not proof of an entirely traceless business scenario.
 
 ## AI workflow
 

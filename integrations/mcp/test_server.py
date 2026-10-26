@@ -71,6 +71,16 @@ class AdapterTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 server.JavaAPI(url, None)
 
+    def test_cleanup_plan_keys_are_paginated_with_no_target_calls(self):
+        with patch.object(server.api, "request", side_effect=[{"state": "READY"}, {"rows": [{"origin": "DERIVED"}]}]) as request:
+            result = server.get_cleanup("batch-id", "plan-id", include_rows=True, offset=100, limit=50)
+            self.assertEqual("DERIVED", result["rowPage"]["rows"][0]["origin"])
+            self.assertEqual(["/batches/batch-id/cleanup/plans/plan-id", "/batches/batch-id/cleanup/plans/plan-id/rows?offset=100&limit=50"], [c.args[0] for c in request.call_args_list])
+        with patch.object(server.api, "request") as request:
+            with self.assertRaises(server.ToolError):
+                server.get_cleanup("batch-id", "plan-id", include_rows=True, limit=201)
+            request.assert_not_called()
+
     def test_scheme_output_excludes_connection_secrets(self):
         row = {"id": 1, "name": "orders", "dataSourceJson": "secret", "tablesJson": "[]"}
         with patch.object(server.api, "request", return_value=row):

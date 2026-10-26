@@ -22,4 +22,6 @@
 
 连接指纹可防止误选其他地址／库；缺少服务器唯一标识时返回 `strength=CONNECTION_SCOPE`，不声称能识别被同地址替换的物理数据库。`trackable=true` 只是原始写入快照完整，不代表可以跳过后续清理预览、引用／修改核查或业务验收。
 
-当前读取接口不删除任何数据。当前源码另提供[请求恢复](request-recovery.md)和[显式批次清理](batch-cleanup.md)；后续业务派生归属仍须另行实现。旧版本生成的数据没有此账本，不能补猜归属。直接使用不带账本依赖的低层嵌入式 GenerationEngine 构造方式也不具备此能力。
+当前读取接口不删除任何数据。当前源码另提供[请求恢复](request-recovery.md)、[显式批次清理](batch-cleanup.md)和可选[派生归属](derived-ownership.md)。旧版本生成的数据没有此账本，不能补猜归属。直接使用不带账本依赖的低层嵌入式 GenerationEngine 构造方式也不具备此能力。
+
+可选[派生归属声明](derived-ownership.md)必须在生成前确定；声明可变字段时额外保存不可变字段摘要。原始主键页仍是插入账本，完整计划清理范围请查 get_cleanup(...,include_rows=true)。

@@ -60,7 +60,7 @@ Ask the AI to inspect the selected database with built-in `list_tables`, `descri
 
 `connection` selects a private local profile (default: `default`). Execution uses the explicitly selected profile, not stale saved credentials. Configuration validation does not prove database constraints, candidate availability, installed extensions or business workflow validity. `FINISHED` means generation completed, not business acceptance.
 
-Multiple states are separate schemes and transactions. Do not automatically retry timed-out writes; retain and query task IDs. If submission timed out before returning an ID, inspect Java task records and target data first. Cleanup is opt-in, bounded to tracked original inserts and requires a reviewed plan; see [cleanup limits](batch-cleanup.en.md).
+Multiple states are separate schemes and transactions. Do not automatically retry timed-out writes; retain and query task IDs. If submission timed out before returning an ID, inspect Java task records and target data first. Cleanup is opt-in, bounded to tracked inserts and explicitly declared verified descendants, and requires a reviewed plan; see [cleanup limits](batch-cleanup.en.md).
 
 ## Portable demo
 
@@ -92,4 +92,4 @@ Read the [batch journal](generation-batches.en.md) after generation; batchId equ
 
 Choose and retain request_id before submission; see [idempotency and recovery](request-recovery.en.md). Legacy no-key HTTP requests have no such guarantee.
 
-[Batch cleanup](batch-cleanup.en.md) covers verified original inserts only and requires preview/authorization; ordinary generation credentials may lack metadata visibility.
+[Batch cleanup](batch-cleanup.en.md) requires preview/authorization; ordinary generation credentials may lack metadata visibility. Optional [later-derived ownership](derived-ownership.en.md) must be declared before generation and passes additional baseline/reference checks. Read persisted plan keys with get_cleanup(include_rows=true).

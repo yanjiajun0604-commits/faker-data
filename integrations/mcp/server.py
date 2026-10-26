@@ -229,7 +229,7 @@ def reconcile_batch(batch_id: str, connection: str = "default", confirm_commit: 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False), structured_output=True)
 def preview_cleanup(batch_id: str, connection: str = "default") -> dict[str, Any]:
-    """Create a local ten-minute cleanup plan; target SELECT only. Inspect eligible/blockers, exact row count/order and scope. Original tracked inserts only; no adoption of later business rows. Unknown metadata visibility, changed/shared/untracked rows, delete triggers, external references and cycles block cleanup. Does not delete data."""
+    """Create a local ten-minute cleanup plan; target SELECT only. Inspect eligible/blockers, exact original/derived counts and deletion order. Later rows require an ownership policy declared before generation, bounded freshness proof and exclusively owned declared ancestry. Unknown weak relationships are not inferred. Changed/shared/untracked rows, delete triggers, external references and cycles block cleanup. Does not delete data."""
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", batch_id):
         raise ToolError("Invalid batch_id.")
     return api.scrub(api.request("/batches/" + batch_id + "/cleanup/preview", {"dataSource": api.connection(connection)}))
@@ -248,11 +248,17 @@ def execute_cleanup(batch_id: str, plan_id: str, plan_hash: str, connection: str
 
 
 @mcp.tool(annotations=READ, structured_output=True)
-def get_cleanup(batch_id: str, plan_id: str) -> dict[str, Any]:
-    """Read a local cleanup receipt without touching the target. DONE includes independent absence verification; UNKNOWN is not safe to retry. Does not delete or create a new plan."""
+def get_cleanup(batch_id: str, plan_id: str, include_rows: bool = False, offset: int = 0, limit: int = 100) -> dict[str, Any]:
+    """Read a local cleanup receipt without touching the target. Optional persisted row page contains exact planned keys and ORIGINAL/DERIVED origin, max 200/page. DONE includes independent absence verification; UNKNOWN is not safe to retry. Does not delete or create a new plan."""
     if not all(re.fullmatch(r"[A-Za-z0-9_-]{1,100}", value) for value in (batch_id, plan_id)):
         raise ToolError("Invalid batch/plan ID.")
-    return api.scrub(api.request("/batches/" + batch_id + "/cleanup/plans/" + plan_id))
+    if not 0 <= offset <= 1000000 or not 1 <= limit <= 200:
+        raise ToolError("Invalid cleanup page range.")
+    path = "/batches/" + batch_id + "/cleanup/plans/" + plan_id
+    result = api.request(path)
+    if include_rows:
+        result["rowPage"] = api.request(path + "/rows?offset=" + str(offset) + "&limit=" + str(limit))
+    return api.scrub(result)
 
 
 @mcp.resource("faker://rules")

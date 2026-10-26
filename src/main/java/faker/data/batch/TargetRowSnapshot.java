@@ -1,6 +1,8 @@
 package faker.data.batch;
 
 import faker.data.domain.TableVO;
+import faker.data.domain.ColumnInfo;
+import faker.data.domain.OwnershipConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.*;
 import java.math.*;
@@ -16,16 +18,24 @@ public final class TargetRowSnapshot {
     public List<Column> columns=new ArrayList<>();
     public List<String> primaryKeys=new ArrayList<>();
     public int[] keyPositions;
+    public List<String> mutableColumns=new ArrayList<>();
+    public OwnershipConfig ownership;
     public static final class Column {
         public String name,typeName;public int type,size,scale;
     }
     public static final class Row {
-        public Map<String,String> primaryKey;public String fingerprint;
+        public Map<String,String> primaryKey;public String fingerprint,ownershipFingerprint;
         public Row(){}
-        Row(Map<String,String> primaryKey,String fingerprint){this.primaryKey=primaryKey;this.fingerprint=fingerprint;}
+        Row(Map<String,String> primaryKey,String[] fingerprints){this.primaryKey=primaryKey;this.fingerprint=fingerprints[0];this.ownershipFingerprint=fingerprints[1];}
     }
 
     public static TargetRowSnapshot inspect(Connection connection,TableVO configured) throws SQLException {
+        return inspect(connection,configured,false);
+    }
+    public static TargetRowSnapshot inspectExisting(Connection connection,String name) throws SQLException {
+        TableVO table=new TableVO();table.setName(name);return inspect(connection,table,true);
+    }
+    private static TargetRowSnapshot inspect(Connection connection,TableVO configured,boolean inferColumns) throws SQLException {
         DatabaseMetaData meta=connection.getMetaData();TargetRowSnapshot out=new TargetRowSnapshot();out.table=configured.getName();
         boolean mysql=meta.getDatabaseProductName().toLowerCase(Locale.ROOT).contains("mysql");
         out.catalog=connection.getCatalog();out.schema=mysql?null:connection.getSchema();
@@ -50,6 +60,7 @@ public final class TargetRowSnapshot {
         TreeMap<Integer,String> keys=new TreeMap<>();
         try(ResultSet rows=meta.getPrimaryKeys(out.catalog,out.schema,out.name)){while(rows.next())keys.put(rows.getInt("KEY_SEQ"),rows.getString("COLUMN_NAME"));}
         out.primaryKeys.addAll(keys.values());
+        if(inferColumns){List<ColumnInfo> actual=new ArrayList<>();for(Column column:out.columns){ColumnInfo col=new ColumnInfo();col.setName(column.name);actual.add(col);}configured.setColumns(actual);}
         for(Column column:out.columns)if(Arrays.asList(Types.JAVA_OBJECT,Types.OTHER,Types.ARRAY,Types.STRUCT,Types.REF,Types.SQLXML).contains(column.type))out.unsupportedReason="UNSUPPORTED_FINGERPRINT_TYPE";
         if(keys.isEmpty())out.unsupportedReason="NO_PRIMARY_KEY";
         if(keys.size()>32)out.unsupportedReason="PRIMARY_KEY_TOO_WIDE";
@@ -63,6 +74,13 @@ public final class TargetRowSnapshot {
             if(!scalarKey(col.type))out.unsupportedReason="UNSUPPORTED_PRIMARY_KEY_TYPE";
             if(key.toLowerCase(Locale.ROOT).matches("(?:.*_)?(?:password|passwd|pwd|secret|api_key|access_token|refresh_token)"))out.unsupportedReason="SENSITIVE_PRIMARY_KEY";
         }
+        out.ownership=configured.getOwnership();
+        if(out.ownership!=null && out.ownership.getMutableColumns()!=null)for(String mutable:out.ownership.getMutableColumns()) {
+            String actual=out.columnInfo(mutable).name;
+            if(out.primaryKeys.contains(actual))throw new IllegalArgumentException("OWNERSHIP_PRIMARY_KEY_CANNOT_BE_MUTABLE");
+            out.mutableColumns.add(actual);
+        }
+        if(out.ownership!=null && (!out.mutableColumns.isEmpty() || out.ownership.getDerivedRows()!=null && !out.ownership.getDerivedRows().isEmpty()) && out.unsupportedReason!=null)throw new IllegalArgumentException("OWNERSHIP_REQUIRES_EXPLICIT_TRACKABLE_PRIMARY_KEY");
         out.schemaHash=sha(json(out.columns)+json(out.primaryKeys));return out;
     }
 
@@ -87,14 +105,14 @@ public final class TargetRowSnapshot {
             List<Map<String,String>> group=keys.subList(offset,Math.min(keys.size(),offset+chunk));
             StringJoiner alternatives=new StringJoiner(" OR ");
             for(Map<String,String> ignored:group){StringJoiner terms=new StringJoiner(" AND ");for(String key:primaryKeys)terms.add(quoted(key)+"=?");alternatives.add("("+terms+")");}
-            try(PreparedStatement statement=connection.prepareStatement("SELECT "+projection+" FROM "+qualified()+" WHERE "+alternatives+(lock?" FOR UPDATE":""))) {
+            try(PreparedStatement statement=connection.prepareStatement("SELECT "+projection+" FROM "+qualified()+" WHERE "+alternatives+(lock?" FOR UPDATE":""),ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY)) {
                 int parameter=1;for(Map<String,String> key:group)for(String name:primaryKeys)statement.setString(parameter++,key.get(name));
-                statement.setQueryTimeout(10);statement.setFetchSize(Math.min(group.size(),50));
+                statement.setQueryTimeout(10);statement.setFetchSize(connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("mysql")?Integer.MIN_VALUE:Math.min(group.size(),50));
                 try(ResultSet rows=statement.executeQuery()) {
                     while(rows.next()) {
                         Map<String,String> key=new LinkedHashMap<>();
                         for(String name:primaryKeys)key.put(name,canonicalKey(rows.getObject(name),column(name).type));
-                        result.add(new Row(key,fingerprint(rows)));
+                        result.add(new Row(key,fingerprints(rows)));
                     }
                 }
             }
@@ -106,9 +124,11 @@ public final class TargetRowSnapshot {
     public String physicalName(){return json(Arrays.asList(catalog,schema,name));}
     public Map<String,String> key(ResultSet row) throws SQLException {Map<String,String> key=new LinkedHashMap<>();for(String name:primaryKeys)key.put(name,canonicalKey(row.getObject(name),column(name).type));return key;}
     public String quoted(String value){return quote+value.replace(quote,quote+quote)+quote;}
+    Column columnInfo(String name){Column folded=null;for(Column column:columns){if(column.name.equals(name))return column;if(column.name.equalsIgnoreCase(name)){if(folded!=null)throw new IllegalArgumentException("OWNERSHIP_AMBIGUOUS_COLUMN");folded=column;}}if(folded==null)throw new IllegalArgumentException("OWNERSHIP_UNKNOWN_COLUMN: "+name);return folded;}
+    String canonical(String name,Object value){return canonicalKey(value,columnInfo(name).type);}
     private Column column(String name){return columns.stream().filter(c->c.name.equals(name)).findFirst().orElseThrow(()->new IllegalArgumentException("BATCH_KEY_COLUMN_NOT_FOUND"));}
-    private String fingerprint(ResultSet rows) throws SQLException {
-        MessageDigest row=digest();long[] bytes={0};
+    private String[] fingerprints(ResultSet rows) throws SQLException {
+        MessageDigest row=digest(),immutable=mutableColumns==null || mutableColumns.isEmpty()?null:digest();long[] bytes={0};
         for(int i=0;i<columns.size();i++) {
             Column col=columns.get(i);MessageDigest cell=digest();
             try {
@@ -122,9 +142,9 @@ public final class TargetRowSnapshot {
                     else {cell.update((byte)1);String canonical=value instanceof BigDecimal?((BigDecimal)value).stripTrailingZeros().toPlainString():value.toString();byte[] data=canonical.getBytes(StandardCharsets.UTF_8);limit(bytes,data.length);cell.update(data);}
                 }
             } catch(IOException e){throw new SQLException("BATCH_FINGERPRINT_READ_FAILED",e);}
-            row.update(cell.digest());
+            byte[] hashed=cell.digest();row.update(hashed);if(immutable!=null && !mutableColumns.contains(col.name))immutable.update(hashed);
         }
-        return hex(row.digest());
+        String full=hex(row.digest());return new String[]{full,immutable==null?full:hex(immutable.digest())};
     }
     private static void limit(long[] bytes,long increment){bytes[0]+=increment;if(bytes[0]>67108864)throw new IllegalArgumentException("BATCH_ROW_FINGERPRINT_LIMIT: 64 MiB");}
     private static boolean text(int t){return Arrays.asList(Types.CHAR,Types.VARCHAR,Types.NCHAR,Types.NVARCHAR,Types.CLOB,Types.NCLOB,Types.LONGVARCHAR,Types.LONGNVARCHAR).contains(t);}

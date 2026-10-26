@@ -24,6 +24,7 @@ public final class GenerationValidator {
                 if(column.getJavaType()==null || column.getJavaType().trim().isEmpty())throw new IllegalArgumentException("Column requires javaType: "+column.getName());
             }
         }
+        OwnershipConfiguration.validate(tables);
     }
     private static void identifier(String name,boolean qualified) {
         String part="[\\p{L}_][\\p{L}\\p{N}_]*";

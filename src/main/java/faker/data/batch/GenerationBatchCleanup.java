@@ -22,11 +22,12 @@ public class GenerationBatchCleanup {
             connection.setAutoCommit(false);
             BatchCleanupChecks.Check result;
             try{result=checks.inspect(connection,batch,false);}finally{connection.rollback();}
-            return plans.save(batch,result.report,result.manifest,result.foreignHash);
+            return plans.save(batch,result.report,result.manifest,result.foreignHash,result.owned);
         }catch(SQLException e){throw DatabaseConnectionException.from(e,request.getDataSource());}
         finally{operation.release();}
     }
     public Map<String,Object> get(String batch,String plan){return plans.receipt(batch,plan);}
+    public Map<String,Object> rows(String batch,String plan,int offset,int limit){return plans.rows(batch,plan,offset,limit);}
     public Map<String,Object> execute(String batch,BatchCleanupRequest request) {
         if(!request.isConfirmDelete())throw new IllegalArgumentException("CLEANUP_CONFIRMATION_REQUIRED");
         acquire();Connection target=null;boolean claimed=false,commitAttempted=false;
@@ -55,7 +56,7 @@ public class GenerationBatchCleanup {
                     requireAbsent(verification,current);
                 }finally{verification.rollback();}
             }
-            Map<String,Object> result=new LinkedHashMap<>();result.put("deletedRows",current.rowCount);result.put("verifiedAbsent",true);result.put("deleteOrder",current.order);result.put("notes","Only recorded original keys were deleted. Source/original rows, sequence counters and normal audit logs were not targeted.");plans.done(plan,result);return plans.receipt(batch,plan.id);
+            Map<String,Object> result=new LinkedHashMap<>();result.put("deletedRows",current.rowCount);result.put("derivedRowCount",current.derivedRowCount);result.put("verifiedAbsent",true);result.put("deleteOrder",current.order);result.put("notes","Deleted only the plan's recorded original and explicitly declared derived keys. Unrelated original rows, sequence counters and undeclared audit logs were not targeted.");plans.done(plan,result);return plans.receipt(batch,plan.id);
         } catch(Exception failure) {
             if(claimed) {
                 boolean rollbackConfirmed=!commitAttempted && target==null;
@@ -86,5 +87,8 @@ public class GenerationBatchCleanup {
         }
     }
     private static void counts(int[] values,int expected) throws SQLException {if(values.length!=expected)throw new SQLException("CLEANUP_DELETE_COUNT_MISMATCH");for(int value:values)if(value!=1 && value!=Statement.SUCCESS_NO_INFO)throw new SQLException("CLEANUP_DELETE_COUNT_MISMATCH");}
-    private static void requireAbsent(Connection connection,BatchCleanupChecks.Check check) throws SQLException {for(BatchCleanupChecks.Owned owned:check.owned.values())if(!owned.table.read(connection,owned.keys).isEmpty())throw new IllegalStateException("CLEANUP_POSTCHECK_ROWS_REMAIN");}
+    private static void requireAbsent(Connection connection,BatchCleanupChecks.Check check) throws SQLException {
+        Map<String,BatchCleanupChecks.Owned> physical=new HashMap<>();for(BatchCleanupChecks.Owned owned:check.owned.values()){physical.put(owned.table.physicalName(),owned);if(!owned.table.read(connection,owned.keys).isEmpty())throw new IllegalStateException("CLEANUP_POSTCHECK_ROWS_REMAIN");}
+        for(OwnershipJournal.Relation relation:check.declared){BatchCleanupChecks.Owned parent=physical.get(relation.parentPhysical);if(parent!=null && !OwnershipJournal.candidates(connection,relation,parent.keys,false,true).isEmpty())throw new IllegalStateException("CLEANUP_POSTCHECK_DERIVED_ROWS_REMAIN");}
+    }
 }

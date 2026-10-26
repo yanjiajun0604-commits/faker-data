@@ -10,13 +10,13 @@ import java.nio.charset.StandardCharsets;
 final class BatchCleanupChecks {
     static final int MAX_ROWS=100000;
     static final class Owned {
-        TargetRowSnapshot table;List<Map<String,String>> keys=new ArrayList<>();Map<String,String> fingerprints=new LinkedHashMap<>();
+        TargetRowSnapshot table;List<Map<String,String>> keys=new ArrayList<>();Map<String,String> fingerprints=new LinkedHashMap<>(),immutable=new LinkedHashMap<>(),origins=new LinkedHashMap<>(),relations=new LinkedHashMap<>();
     }
     static final class Check {
         Map<String,Object> report=new LinkedHashMap<>();Map<String,Owned> owned=new LinkedHashMap<>();
-        List<Map<String,Object>> blockers=new ArrayList<>();List<String> order=new ArrayList<>();String manifest="",foreignHash="";int rowCount;
+        List<Map<String,Object>> blockers=new ArrayList<>();List<String> order=new ArrayList<>();Map<String,Set<String>> declaredEdges=new LinkedHashMap<>();List<OwnershipJournal.Relation> declared=new ArrayList<>();String manifest="",foreignHash="";int rowCount,derivedRowCount;
         void block(String code,String table){if(blockers.size()<100)blockers.add(map("code",code,"table",table));}
-        void finish(){report.put("eligible",blockers.isEmpty());report.put("rowCount",rowCount);report.put("blockers",blockers);report.put("deleteOrder",order);report.put("scope","ORIGINAL_TRACKED_INSERTS_AND_PHYSICAL_FOREIGN_KEYS");report.put("notes","Later weakly linked/business-derived rows are not automatically owned. Delete triggers, incomplete visibility and unsupported/cyclic references block cleanup. No target data is written by preview.");}
+        void finish(){report.put("eligible",blockers.isEmpty());report.put("rowCount",rowCount);report.put("derivedRowCount",derivedRowCount);report.put("blockers",blockers);report.put("deleteOrder",order);report.put("scope","TRACKED_INSERTS_AND_EXPLICIT_VERIFIED_DERIVED_RELATIONS");report.put("notes","Only predeclared, bounded and freshness-checked relations may add later rows. Unknown weak relations cannot be inferred. Delete triggers, incomplete visibility and unsupported/cyclic references block cleanup. Preview does not write target data.");}
     }
     private final GenerationBatchStore store;
     BatchCleanupChecks(GenerationBatchStore store){this.store=store;}
@@ -57,7 +57,7 @@ final class BatchCleanupChecks {
                 keyCharacters+=encoded.length()+fingerprint.length();for(String value:key.values())keyCharacters+=value.length();
                 if(encoded.length()>8192 || keyCharacters>16777216){check.block("CLEANUP_KEY_BUDGET",table);break;}
                 if(owned.fingerprints.put(encoded,fingerprint)!=null)check.block("DUPLICATE_JOURNAL_KEY",table);
-                owned.keys.add(key);ownershipKeys.computeIfAbsent(table,k->new ArrayList<>()).add(encoded);feed(manifest,table);feed(manifest,encoded);feed(manifest,fingerprint);
+                owned.immutable.put(encoded,(String)row.get("ownershipFingerprint"));owned.origins.put(encoded,"ORIGINAL");owned.keys.add(key);ownershipKeys.computeIfAbsent(table,k->new ArrayList<>()).add(encoded);
             }
             for(Map.Entry<String,List<String>> keys:ownershipKeys.entrySet())if(store.hasOtherOwners(id,identity,check.owned.get(keys.getKey()).table.physicalName(),keys.getValue()))check.block("SHARED_BATCH_OWNERSHIP",keys.getKey());
             seen+=rows.size();if(seen>MAX_ROWS){check.block("CLEANUP_ROW_LIMIT",null);break;}
@@ -66,21 +66,29 @@ final class BatchCleanupChecks {
         }
         if(seen!=check.rowCount)check.block("JOURNAL_ROW_COUNT_MISMATCH",null);
         for(Map<String,Object> table:tables)if(check.owned.containsKey(table.get("table")) && check.owned.get(table.get("table")).keys.size()!=((Number)table.get("stagedRows")).intValue())check.block("JOURNAL_ROW_COUNT_MISMATCH",(String)table.get("table"));
-        check.manifest=TargetRowSnapshot.hex(manifest.digest());
         if(!check.blockers.isEmpty()){check.finish();return check;}
         for(Map.Entry<String,Owned> entry:check.owned.entrySet()) {
             Owned owned=entry.getValue();List<TargetRowSnapshot.Row> actual=owned.table.read(connection,owned.keys,lock);int matched=0;
-            for(TargetRowSnapshot.Row row:actual)if(Objects.equals(owned.fingerprints.get(TargetRowSnapshot.json(row.primaryKey)),row.fingerprint))matched++;
+            for(TargetRowSnapshot.Row row:actual){String key=TargetRowSnapshot.json(row.primaryKey);if(Objects.equals(owned.immutable.get(key),row.ownershipFingerprint)){matched++;owned.fingerprints.put(key,row.fingerprint);}}
             if(actual.size()!=owned.keys.size() || matched!=owned.keys.size())check.block("ROW_CHANGED_OR_MISSING",entry.getKey());
             if(lock && !Objects.equals(owned.table.schemaHash,current(connection,owned.table).schemaHash))check.block("SCHEMA_CHANGED",entry.getKey());
         }
         if(!check.blockers.isEmpty()){check.finish();return check;}
+        new DerivedOwnershipResolver(store).expand(connection,id,check,identity,lock);
+        if(!check.blockers.isEmpty()){check.finish();return check;}
+        capabilities(connection,check);
+        if(!check.blockers.isEmpty()){check.finish();return check;}
+        for(Map.Entry<String,Owned> entry:check.owned.entrySet()){
+            feed(manifest,entry.getKey());feed(manifest,entry.getValue().table.schemaHash);
+            for(Map<String,String> key:entry.getValue().keys){String encoded=TargetRowSnapshot.json(key);feed(manifest,encoded);feed(manifest,entry.getValue().fingerprints.get(encoded));feed(manifest,entry.getValue().origins.get(encoded));feed(manifest,entry.getValue().relations.get(encoded));}
+        }
+        check.manifest=TargetRowSnapshot.hex(manifest.digest());
         foreignKeys(connection,check,lock);
         if(lock && check.blockers.isEmpty())capabilities(connection,check);
         check.finish();return check;
     }
 
-    private static TargetRowSnapshot current(Connection connection,TargetRowSnapshot old) throws SQLException {
+    static TargetRowSnapshot current(Connection connection,TargetRowSnapshot old) throws SQLException {
         TableVO table=new TableVO();table.setName(old.table);List<ColumnInfo> columns=new ArrayList<>();for(TargetRowSnapshot.Column actual:old.columns){ColumnInfo col=new ColumnInfo();col.setName(actual.name);columns.add(col);}table.setColumns(columns);return TargetRowSnapshot.inspect(connection,table);
     }
 
@@ -134,7 +142,7 @@ final class BatchCleanupChecks {
             }
             foreigns.addAll(grouped.values());
         }
-        foreigns.sort(Comparator.comparing(f->f.parent+"\n"+f.physical()+"\n"+f.name));MessageDigest digest=digest();Map<String,Set<String>> edges=new LinkedHashMap<>();for(String name:check.owned.keySet())edges.put(name,new LinkedHashSet<>());
+        foreigns.sort(Comparator.comparing(f->f.parent+"\n"+f.physical()+"\n"+f.name));MessageDigest digest=digest();Map<String,Set<String>> edges=new LinkedHashMap<>();for(String name:check.owned.keySet())edges.put(name,new LinkedHashSet<>(check.declaredEdges.getOrDefault(name,Collections.emptySet())));feed(digest,check.declaredEdges);
         int scanned=0;
         for(Foreign fk:foreigns) {
             Owned parent=check.owned.get(fk.parent);TargetRowSnapshot p=parent.table;
@@ -150,7 +158,7 @@ final class BatchCleanupChecks {
                 String projection="1";if(child!=null){StringJoiner names=new StringJoiner(",");for(String key:child.table.primaryKeys)names.add(p.quoted(key));projection=names.toString();}
                 String prefix=fk.childSchema==null?fk.childCatalog:fk.childSchema;String qualified=(prefix==null?"":p.quoted(prefix)+".")+p.quoted(fk.childName);
                 try(PreparedStatement statement=connection.prepareStatement("SELECT "+projection+" FROM "+qualified+" WHERE "+where+(lock?" FOR UPDATE":""))) {
-                    int parameter=1;for(Map<String,String> key:keys)for(String[] pair:fk.columns.values())statement.setString(parameter++,key.get(pair[0]));statement.setQueryTimeout(10);statement.setMaxRows(MAX_ROWS+1);statement.setFetchSize(100);
+                    int parameter=1;for(Map<String,String> key:keys)for(String[] pair:fk.columns.values())statement.setString(parameter++,key.get(pair[0]));statement.setQueryTimeout(10);statement.setMaxRows(MAX_ROWS+1);statement.setFetchSize(connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("mysql")?Integer.MIN_VALUE:100);
                     try(ResultSet rows=statement.executeQuery()) {
                         while(rows.next()) {
                             if(++scanned>MAX_ROWS){check.block("REFERENCE_SCAN_LIMIT",p.table);break;}

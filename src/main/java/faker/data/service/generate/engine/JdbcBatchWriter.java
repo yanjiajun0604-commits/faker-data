@@ -14,7 +14,7 @@ import java.util.function.IntFunction;
 
 /** 只负责参数绑定与批写入；事务边界由生成引擎统一管理。 */
 public final class JdbcBatchWriter {
-    public interface Observer {void row(Object[] values);void written(Connection connection) throws SQLException;}
+    public interface Observer {void row(Object[] values);default void beforeWrite(Connection connection) throws SQLException{}void written(Connection connection) throws SQLException;}
     public static final int BATCH_SIZE = 1000;
     private final String sql;
     private final JdbcValueBinder[] binders;
@@ -46,15 +46,16 @@ public final class JdbcBatchWriter {
                         Object[] values=source.apply(row);
                         if(observer!=null)observer.row(values);
                         for(int col=0;col<binders.length;col++)binders[col].bind(ps,values[col]);
-                        if(batches)ps.addBatch();else if(ps.executeUpdate()!=1)throw new SQLException("BATCH_INSERT_COUNT_UNEXPECTED");
+                        if(batches)ps.addBatch();else {if(observer!=null)observer.beforeWrite(connection);if(ps.executeUpdate()!=1)throw new SQLException("BATCH_INSERT_COUNT_UNEXPECTED");if(observer!=null)observer.written(connection);}
                     }
                     if(batches){
+                        if(observer!=null)observer.beforeWrite(connection);
                         int[] counts=ps.executeBatch();
                         if(counts.length!=end-offset)throw new SQLException("BATCH_INSERT_COUNT_UNEXPECTED");
                         for(int affected:counts)if(affected!=1 && affected!=Statement.SUCCESS_NO_INFO)throw new SQLException("BATCH_INSERT_COUNT_UNEXPECTED");
                         ps.clearBatch();
                     }
-                    if(observer!=null)observer.written(connection);
+                    if(batches && observer!=null)observer.written(connection);
                     progress.accept(end);
                     offset=end;
                 }

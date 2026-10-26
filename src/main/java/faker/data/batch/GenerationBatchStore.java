@@ -13,7 +13,7 @@ import java.util.*;
 /** SQLite 账本与目标数据库事务分离；未知状态不会被当成已回滚。 */
 @Service
 public class GenerationBatchStore {
-    private final JdbcTemplate jdbc;private final TransactionTemplate local;
+    private final JdbcTemplate jdbc;private final TransactionTemplate local;private final OwnershipJournal ownership;
     private final ObjectMapper json=new ObjectMapper();
     public GenerationBatchStore(JdbcTemplate jdbc) {
         this.jdbc=jdbc;this.local=new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
@@ -22,6 +22,8 @@ public class GenerationBatchStore {
         jdbc.execute("CREATE TABLE IF NOT EXISTS faker_generation_row(row_id INTEGER PRIMARY KEY AUTOINCREMENT,batch_id TEXT NOT NULL,table_name TEXT NOT NULL,keys_json TEXT NOT NULL,fingerprint TEXT NOT NULL,UNIQUE(batch_id,table_name,keys_json))");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_generation_row_batch ON faker_generation_row(batch_id,row_id)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_generation_row_key ON faker_generation_row(keys_json,batch_id,table_name)");
+        if(!jdbc.queryForList("PRAGMA table_info(faker_generation_row)").stream().anyMatch(c->"ownership_fingerprint".equals(c.get("name"))))jdbc.execute("ALTER TABLE faker_generation_row ADD COLUMN ownership_fingerprint TEXT");
+        ownership=new OwnershipJournal(jdbc);
         if(!jdbc.queryForList("PRAGMA table_info(faker_generation_batch)").stream().anyMatch(c->"prepared_at".equals(c.get("name"))))jdbc.execute("ALTER TABLE faker_generation_batch ADD COLUMN prepared_at INTEGER");
         if(!jdbc.queryForList("PRAGMA table_info(faker_generation_batch)").stream().anyMatch(c->"ownership_scope".equals(c.get("name"))))jdbc.execute("ALTER TABLE faker_generation_batch ADD COLUMN ownership_scope TEXT");
         if(!jdbc.queryForList("PRAGMA table_info(faker_generation_table)").stream().anyMatch(c->"physical_name".equals(c.get("name"))))jdbc.execute("ALTER TABLE faker_generation_table ADD COLUMN physical_name TEXT");
@@ -54,10 +56,16 @@ public class GenerationBatchStore {
         String text=jdbc.queryForObject("SELECT descriptor_json FROM faker_generation_table WHERE batch_id=? AND table_name=?",String.class,id,table);
         try{return json.readValue(text,TargetRowSnapshot.class);}catch(Exception e){throw new IllegalStateException("BATCH_DESCRIPTOR_INVALID",e);}
     }
+    public void captureOwnership(String id,Connection target,List<TableVO> tables) throws SQLException {
+        if(!faker.data.service.generate.engine.OwnershipConfiguration.enabled(tables))return;
+        Map<String,TargetRowSnapshot> originals=new LinkedHashMap<>();for(TableVO table:tables)if(table.getExistingData()==null)originals.put(table.getName().toLowerCase(Locale.ROOT),descriptor(id,table.getName()));
+        ownership.capture(id,target,tables,originals);
+    }
+    OwnershipJournal ownership(){return ownership;}
     public void record(String id,String table,int executed,List<TargetRowSnapshot.Row> rows) {
         local.executeWithoutResult(status->{
-            List<Object[]> parameters=new ArrayList<>();for(TargetRowSnapshot.Row row:rows)parameters.add(new Object[]{id,table,TargetRowSnapshot.json(row.primaryKey),row.fingerprint});
-            if(!parameters.isEmpty())jdbc.batchUpdate("INSERT INTO faker_generation_row(batch_id,table_name,keys_json,fingerprint) VALUES(?,?,?,?)",parameters);
+            List<Object[]> parameters=new ArrayList<>();for(TargetRowSnapshot.Row row:rows)parameters.add(new Object[]{id,table,TargetRowSnapshot.json(row.primaryKey),row.fingerprint,row.ownershipFingerprint});
+            if(!parameters.isEmpty())jdbc.batchUpdate("INSERT INTO faker_generation_row(batch_id,table_name,keys_json,fingerprint,ownership_fingerprint) VALUES(?,?,?,?,?)",parameters);
             jdbc.update("UPDATE faker_generation_table SET executed_rows=executed_rows+? WHERE batch_id=? AND table_name=?",executed,id,table);
         });
     }
@@ -72,7 +80,7 @@ public class GenerationBatchStore {
                 List<TargetRowSnapshot.Row> observed=descriptor.read(target,keys);
                 Set<String> expected=new HashSet<>(),actual=new HashSet<>();for(Map<String,String> key:keys)expected.add(TargetRowSnapshot.json(key));for(TargetRowSnapshot.Row row:observed)actual.add(TargetRowSnapshot.json(row.primaryKey));
                 if(!expected.equals(actual))throw new IllegalStateException("BATCH_FINAL_KEYS_NOT_CONFIRMED");
-                local.executeWithoutResult(status->{List<Object[]> parameters=new ArrayList<>();for(TargetRowSnapshot.Row row:observed)parameters.add(new Object[]{row.fingerprint,id,name,TargetRowSnapshot.json(row.primaryKey)});jdbc.batchUpdate("UPDATE faker_generation_row SET fingerprint=? WHERE batch_id=? AND table_name=? AND keys_json=?",parameters);});
+                local.executeWithoutResult(status->{List<Object[]> parameters=new ArrayList<>();for(TargetRowSnapshot.Row row:observed)parameters.add(new Object[]{row.fingerprint,row.ownershipFingerprint,id,name,TargetRowSnapshot.json(row.primaryKey)});jdbc.batchUpdate("UPDATE faker_generation_row SET fingerprint=?,ownership_fingerprint=? WHERE batch_id=? AND table_name=? AND keys_json=?",parameters);});
                 offset+=keys.size();
             }
         }
@@ -83,7 +91,7 @@ public class GenerationBatchStore {
     }
     public void complete(String id,int completion) {
         String state=completion==org.springframework.transaction.support.TransactionSynchronization.STATUS_COMMITTED?"COMMITTED":completion==org.springframework.transaction.support.TransactionSynchronization.STATUS_ROLLED_BACK?"ROLLED_BACK":"UNKNOWN";
-        jdbc.update("UPDATE faker_generation_batch SET state=?,updated_at=? WHERE batch_id=? AND state IN ('WRITING','PREPARED')",state,System.currentTimeMillis(),id);
+        try{jdbc.update("UPDATE faker_generation_batch SET state=?,updated_at=? WHERE batch_id=? AND state IN ('WRITING','PREPARED')",state,System.currentTimeMillis(),id);}finally{ownership.evict(id);}
     }
     private void transition(String id,String state,String old){if(jdbc.update("UPDATE faker_generation_batch SET state=?,updated_at=? WHERE batch_id=? AND state=?",state,System.currentTimeMillis(),id,old)!=1)throw new IllegalStateException("BATCH_STATE_CONFLICT");}
     public void requireCommitted(String id){if(!"COMMITTED".equals(jdbc.queryForObject("SELECT state FROM faker_generation_batch WHERE batch_id=?",String.class,id)))throw new IllegalStateException("BATCH_COMMIT_RECEIPT_UNKNOWN: inspect batch before retrying");}
@@ -96,11 +104,11 @@ public class GenerationBatchStore {
         out.put("preparedAt",jdbc.queryForObject("SELECT prepared_at FROM faker_generation_batch WHERE batch_id=?",Long.class,id));
         boolean committed="COMMITTED".equals(out.get("state"));
         out.put("tables",tables);out.put("rowCount",committed?verified:0);out.put("stagedRowCount",verified);out.put("untrackedRows",committed?untracked:0);out.put("trackable",committed && untracked==0);
-        out.put("notes","Batch ownership covers observed inserts only, not later business-created rows. Unsupported key modes are untrackable. No cleanup is performed by reading this record.");return out;
+        out.put("declaredOwnership",ownership.summary(id));out.put("notes","Original insert snapshots are separate from declared later-derived ownership. Only bounded, verified relations can be adopted during cleanup preview. Reading a record does not delete data.");return out;
     }
     public Map<String,Object> rows(String id,int offset,int limit) {
         get(id);if(offset<0 || offset>1000000 || limit<1 || limit>200)throw new IllegalArgumentException("BATCH_PAGE_LIMIT");
-        List<Map<String,Object>> rows=jdbc.query("SELECT * FROM faker_generation_row WHERE batch_id=? ORDER BY row_id LIMIT ? OFFSET ?",(rs,n)->map("table",rs.getString("table_name"),"primaryKey",decode(rs.getString("keys_json")),"fingerprint",rs.getString("fingerprint")),id,limit+1,offset);
+        List<Map<String,Object>> rows=jdbc.query("SELECT * FROM faker_generation_row WHERE batch_id=? ORDER BY row_id LIMIT ? OFFSET ?",(rs,n)->map("table",rs.getString("table_name"),"primaryKey",decode(rs.getString("keys_json")),"fingerprint",rs.getString("fingerprint"),"ownershipFingerprint",rs.getString("ownership_fingerprint")==null?rs.getString("fingerprint"):rs.getString("ownership_fingerprint")),id,limit+1,offset);
         boolean more=rows.size()>limit;if(more)rows.remove(rows.size()-1);
         return map("batchId",id,"rows",rows,"offset",offset,"limit",limit,"truncated",more,"nextOffset",more?offset+rows.size():null,"ownership","Only COMMITTED snapshots are eligible for future ownership validation");
     }
@@ -112,9 +120,13 @@ public class GenerationBatchStore {
         });
     }
     public boolean hasOtherOwners(String id,Map<String,Object> identity,String physicalName,List<String> keys) {
+        if(keys.size()>200){for(int offset=0;offset<keys.size();offset+=200)if(hasOtherOwners(id,identity,physicalName,keys.subList(offset,Math.min(keys.size(),offset+200))))return true;return false;}
         if(keys.isEmpty())return false;StringJoiner parameters=new StringJoiner(",");List<Object> args=new ArrayList<>();args.add(id);args.add(ownershipScope(identity));args.add(physicalName);
         for(String key:keys){parameters.add("?");args.add(key);}
-        return !jdbc.queryForList("SELECT 1 FROM faker_generation_row r JOIN faker_generation_batch b ON b.batch_id=r.batch_id JOIN faker_generation_table t ON t.batch_id=r.batch_id AND t.table_name=r.table_name WHERE b.batch_id<>? AND b.ownership_scope=? AND t.physical_name=? AND b.state NOT IN ('ROLLED_BACK','CLEANED') AND r.keys_json IN ("+parameters+") LIMIT 1",args.toArray()).isEmpty();
+        if(!jdbc.queryForList("SELECT 1 FROM faker_generation_row r JOIN faker_generation_batch b ON b.batch_id=r.batch_id JOIN faker_generation_table t ON t.batch_id=r.batch_id AND t.table_name=r.table_name WHERE b.batch_id<>? AND b.ownership_scope=? AND t.physical_name=? AND b.state NOT IN ('ROLLED_BACK','CLEANED') AND r.keys_json IN ("+parameters+") LIMIT 1",args.toArray()).isEmpty())return true;
+        if(jdbc.queryForList("SELECT name FROM sqlite_master WHERE type='table' AND name='faker_cleanup_row'").isEmpty())return false;
+        args.add(System.currentTimeMillis());
+        return !jdbc.queryForList("SELECT 1 FROM faker_cleanup_row r JOIN faker_cleanup_plan p ON p.plan_id=r.plan_id JOIN faker_generation_batch b ON b.batch_id=p.batch_id WHERE b.batch_id<>? AND b.ownership_scope=? AND r.physical_name=? AND b.state NOT IN ('ROLLED_BACK','CLEANED') AND r.keys_json IN ("+parameters+") AND (p.state IN ('EXECUTING','PREPARED','UNKNOWN') OR p.state='READY' AND p.expires_at>=?) LIMIT 1",args.toArray()).isEmpty();
     }
     private static String ownershipScope(Map<String,Object> identity){return identity.get("serverId")==null?String.valueOf(identity.get("fingerprint")):TargetRowSnapshot.sha(String.valueOf(identity.get("product"))+"\n"+identity.get("serverId"));}
     public static Map<String,Object> identity(Connection connection) throws SQLException {

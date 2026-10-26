@@ -113,4 +113,4 @@ python -m unittest discover -s integrations/mcp -p test_server.py -v
 
 提交前选定并保留 request_id；详见[请求幂等与恢复](request-recovery.md)。无键的旧 HTTP 请求不受此保障。
 
-[按批次清理](batch-cleanup.md)只覆盖已核实的原始写入，需先预览并明确授权；普通生成账号不必然具备完整清理元数据权限。
+[按批次清理](batch-cleanup.md)需先预览并明确授权；普通生成账号不必然具备完整清理元数据权限。可选[后续派生归属](derived-ownership.md)必须在生成前声明，另经基线与引用核查；用 get_cleanup(include_rows=true) 查看持久化的计划主键。

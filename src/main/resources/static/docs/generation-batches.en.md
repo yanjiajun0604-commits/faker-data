@@ -22,4 +22,6 @@ Initial reliable tracking requires explicitly supplied VARCHAR/NVARCHAR/integer/
 
 Connection fingerprints detect a different endpoint/database; without a server ID, `strength=CONNECTION_SCOPE` does not identify physical database replacement at the same address. `trackable=true` means the original snapshot is complete, not that cleanup may skip preview, reference/change checks or business acceptance.
 
-These read APIs do not delete data. Current source separately provides [request recovery](request-recovery.en.md) and [explicit cleanup](batch-cleanup.en.md); later derived-record ownership remains separate. Older generated rows have no journal and cannot be adopted by guessing. Low-level embedded GenerationEngine constructors without the journal dependency do not provide tracking.
+These read APIs do not delete data. Current source separately provides [request recovery](request-recovery.en.md), [explicit cleanup](batch-cleanup.en.md) and optional [derived ownership](derived-ownership.en.md). Older generated rows have no journal and cannot be adopted by guessing. Low-level embedded GenerationEngine constructors without the journal dependency do not provide tracking.
+
+Declared later-derived ownership is optional and fixed before generation; see [ownership policy](derived-ownership.en.md). The journal now also retains an immutable-field digest for explicitly mutable columns. Original row pages remain the insert journal; use get_cleanup(...,include_rows=true) for the full planned deletion scope.

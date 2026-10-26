@@ -51,6 +51,7 @@ public class GenerationEngine {
         }
         JdbcTemplate jdbc=new JdbcTemplate(target);
         TransactionTemplate transaction=new TransactionTemplate(new DataSourceTransactionManager(target));
+        if(OwnershipConfiguration.enabled(tables))transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_SERIALIZABLE);
         Map<String,List<String>> rowIds=new HashMap<>();
         Map<TableGenerationPlan,ExistingDataLoader> existing=new IdentityHashMap<>();
         Map<TableGenerationPlan,ParentRowsSelector> selectors=new IdentityHashMap<>();
@@ -66,6 +67,7 @@ public class GenerationEngine {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){
                     @Override public void afterCompletion(int completion){batches.complete(task,completion);}
                 });
+                jdbc.execute((ConnectionCallback<Void>)connection->{batches.captureOwnership(task,connection,orderedTables);return null;});
             }
             Map<String,List<Map<String,Object>>> generated=new LinkedHashMap<>();
             long cells=0;
