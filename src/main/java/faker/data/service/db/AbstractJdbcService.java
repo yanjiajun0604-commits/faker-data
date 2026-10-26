@@ -242,10 +242,31 @@ public abstract class AbstractJdbcService implements JdbcService {
      */
     protected abstract String schemaPattern();
 
+    @Override
+    public Map<String,Object> inspectDatabase(DatabaseInspectionRequest request) {
+        return new ReadOnlyDatabaseInspector(this::getConnection,catalog(),schemaPattern(),dataSource).inspect(request);
+    }
+
+    @Override
+    public Map<String,Object> readRows(DatabaseInspectionRequest request) {
+        return new ReadOnlyDatabaseInspector(this::getConnection,catalog(),schemaPattern(),dataSource).read(request);
+    }
+
+    @Override
+    public Map<String,Object> preflightGeneration(List<TableVO> tables) {
+        return new GenerationPreflight(name->{
+            DatabaseInspectionRequest request=new DatabaseInspectionRequest();request.setTable(name);
+            return inspectDatabase(request);
+        },this::readRows).check(tables);
+    }
+
 
     @Override
     public void generateData(List<TableVO> tables, AsyncTaskMonitor monitor, AsyncTaskExecutor executor) {
         if (!test()) throw new IllegalStateException("连接数据库失败");
+        Map<String,Object> preflight=preflightGeneration(tables);
+        if(!Boolean.TRUE.equals(preflight.get("valid")))
+            throw new IllegalArgumentException("GENERATION_PREFLIGHT_FAILED: "+preflight.get("errors"));
         // 兼容直接构造适配器的旧入口；正式任务入口显式注入引擎。
         GenerationEngine engine = generationEngine != null ? generationEngine
                 : ApplicationContextProvider.getContext().getBean(GenerationEngine.class);

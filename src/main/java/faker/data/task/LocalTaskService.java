@@ -7,6 +7,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import javax.annotation.PreDestroy;
 import java.util.*;
 import java.util.concurrent.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import faker.data.batch.TargetRowSnapshot;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 单进程有界队列；SQLite 仅记录任务状态，不保存带凭据的请求。 */
 @Service
@@ -15,10 +20,13 @@ public class LocalTaskService {
     private final ReferenceCache cache;
     private final Map<String,AsyncTaskExecutor> executors=new HashMap<>();
     private final ThreadPoolExecutor pool;
+    private final TransactionTemplate local;
     public LocalTaskService(JdbcTemplate jdbc,ReferenceCache cache,List<AsyncTaskExecutor> handlers,
             @Value("${faker.tasks.workers:2}") int workers,@Value("${faker.tasks.queue-capacity:100}") int capacity){
         if(workers<1 || capacity<1) throw new IllegalArgumentException("任务线程数和队列容量必须大于 0");
         this.jdbc=jdbc;this.cache=cache;
+        this.local=new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
+        jdbc.execute("CREATE TABLE IF NOT EXISTS faker_generation_request(request_id TEXT PRIMARY KEY,payload_hash TEXT NOT NULL,task_id TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL)");
         for(AsyncTaskExecutor h:handlers) {
             if(executors.put(h.getTaskPoolType(),h)!=null) throw new IllegalStateException("任务类型重复");
         }
@@ -28,10 +36,47 @@ public class LocalTaskService {
         AsyncTaskExecutor executor=executors.get(type);
         if(executor==null) throw new IllegalArgumentException("不支持的任务类型");
         String id=UUID.randomUUID().toString();long now=System.currentTimeMillis();
-        jdbc.update("INSERT INTO faker_task(id,type,state,progress,created_at,updated_at) VALUES(?,?,'WAITING',0,?,?)",id,type,now,now);
+        Object rawKey=args instanceof Map?((Map<?,?>)args).get("requestId"):null;
+        String request=rawKey==null?null:requestKey(rawKey);
+        if(request!=null) {
+            String hash=payloadHash(type,args);
+            String claimed=local.execute(status->{
+                // 首条语句先抢写锁，避免两个读事务同时升级 SQLite WAL 写锁。
+                int inserted=jdbc.update("INSERT OR IGNORE INTO faker_generation_request(request_id,payload_hash,task_id,created_at) VALUES(?,?,?,?)",request,hash,id,now);
+                if(inserted==0) {
+                    Map<String,Object> existing=jdbc.queryForMap("SELECT payload_hash,task_id FROM faker_generation_request WHERE request_id=?",request);
+                    if(!hash.equals(existing.get("payload_hash")))throw new IllegalArgumentException("IDEMPOTENCY_CONFLICT: requestId already belongs to a different payload");
+                    return (String)existing.get("task_id");
+                }
+                insertTask(id,type,now);return id;
+            });
+            if(!id.equals(claimed))return claimed;
+        } else insertTask(id,type,now);
         try {pool.execute(new Job(id,executor,args));}
         catch(RejectedExecutionException ex){update(id,TaskState.ERROR,0,"提交失败","任务队列已满或服务正在关闭");throw new IllegalStateException("任务队列已满或服务正在关闭，请稍后重试");}
         return id;
+    }
+    private void insertTask(String id,String type,long now){jdbc.update("INSERT INTO faker_task(id,type,state,progress,created_at,updated_at) VALUES(?,?,'WAITING',0,?,?)",id,type,now,now);}
+    public Map<String,Object> findRequest(String key) {
+        requestKey(key);List<String> ids=jdbc.queryForList("SELECT task_id FROM faker_generation_request WHERE request_id=?",String.class,key);
+        Map<String,Object> result=new LinkedHashMap<>();result.put("requestId",key);result.put("found",!ids.isEmpty());
+        if(!ids.isEmpty()){result.put("taskId",ids.get(0));result.put("state",query(ids.get(0)).getState());}return result;
+    }
+    private static String requestKey(Object raw){if(!(raw instanceof String) || !((String)raw).matches("[A-Za-z0-9][A-Za-z0-9_-]{7,99}"))throw new IllegalArgumentException("requestId must contain 8-100 ASCII letters, digits, underscores or hyphens");return (String)raw;}
+    @SuppressWarnings("unchecked") private static String payloadHash(String type,Object args) {
+        try {
+            ObjectMapper mapper=new ObjectMapper();Map<String,Object> value=mapper.readValue(mapper.writeValueAsString(args),new TypeReference<Map<String,Object>>(){});value.remove("requestId");
+            Object source=value.get("dataSource");
+            if(source instanceof Map) {
+                Map<String,Object> connection=(Map<String,Object>)source;connection.remove("password");
+                Object url=connection.get("url");if(url instanceof String)connection.put("url",((String)url).replaceAll("(?i)(password|passwd|pwd|token|secret|api_key)=([^&;]+)","$1=REDACTED"));
+            }
+            return TargetRowSnapshot.sha(type+"\n"+mapper.writeValueAsString(canonical(value)));
+        }catch(java.io.IOException e){throw new IllegalArgumentException("Invalid idempotent generation request");}
+    }
+    private static Object canonical(Object value) {
+        if(value instanceof Map){Map<String,Object> sorted=new TreeMap<>();((Map<?,?>)value).forEach((k,v)->sorted.put(String.valueOf(k),canonical(v)));return sorted;}
+        if(value instanceof List){List<Object> ordered=new ArrayList<>();for(Object item:(List<?>)value)ordered.add(canonical(item));return ordered;}return value;
     }
     public TaskProcessVO query(String id){
         List<TaskProcessVO> rows=jdbc.query("SELECT * FROM faker_task WHERE id=?",(rs,n)->

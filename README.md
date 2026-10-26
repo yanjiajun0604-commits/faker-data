@@ -1,5 +1,7 @@
 # faker-data
 
+Current source provides [built-in read-only database inspection](docs/database-inspection.en.md) through three MCP tools, plus database preflight and the original five generation/scheme tools. A separate database MCP is optional. This is a source preview, not a claim about an older downloaded JAR.
+
 Current-source preview: [AI MCP setup](docs/mcp.en.md), exact correlated references, and a portable [order demo](examples/create-order-schemes.py). These changes are not included in older release JARs.
 
 

@@ -51,16 +51,26 @@ macOS/Linux 的 command 改为 `/path/to/faker-data/.venv/bin/python`。不同�
 
 可以向 AI 描述：
 
-> 使用 dbquery 阅读我的测试库结构。参考 faker-data 的 faker://rules，用已有规则生成订单和明细：保存 50、提交中 20、完成 100。客户引用库中启用的客户。先检查规则，普通字段不要写扩展，确认在我授权的测试库生成，并返回任务结果和验收查询。
+> 使用 faker-data 的 list_tables、describe_table、read_rows 阅读我的测试库结构。参考 faker-data 的 faker://rules，用已有规则生成订单和明细：保存 50、提交中 20、完成 100。客户引用库中启用的客户。先检查规则，普通字段不要写扩展，确认在我授权的测试库生成，并返回任务结果和验收查询。
 
-AI 应先用既有数据库 MCP 理解表结构、关联及业务条件；本项目不新增数据库调查工具。读取 `faker://rules` 后，为三种状态分别准备普通方案。
+AI 应先用内置只读工具理解表结构、关联及业务条件；不必额外安装 dbquery。读取 `faker://rules` 后，为三种状态分别准备普通方案。弱引用和业务状态仍需结合实际样本与业务说明判断，工具不自动推断。详见[数据库调查边界与 HTTP 示例](database-inspection.md)。
 
 | MCP 工具 | 作用 |
 | --- | --- |
+| `list_tables(name_contains, limit, offset, connection)` | 当前数据库／schema 的普通表分页发现 |
+| `describe_table(table, connection)` | 列、Java 类型、注释及驱动报告的主外键／索引 |
+| `read_rows(table, columns, where, order_by, limit, connection)` | 参数化单表样本读取；默认 20、最多 100 行 |
 | `validate_generation(tables)` | 只校验配置、规则和依赖，不连接目标数据库或执行扩展 |
+| `preflight_generation(tables, connection)` | 真实元数据及固定值约束预检；检查 valid/errors/warnings/notChecked，无写入 |
 | `save_scheme(name, tables, connection)` | 校验并保存普通方案；同名会更新，人工 UI 可继续使用 |
 | `get_scheme(scheme_id)` | 读取方案规则；省略 ID 则列出名称与 ID，不返回连接凭据 |
-| `generate_data(scheme_id, connection, confirm_write)` | `confirm_write=true` 表示处于用户已授权的写入范围，提交一次 GEN_DATA，立即返回任务 ID |
+| `generate_data(scheme_id, connection, confirm_write, request_id)` | `confirm_write=true` 表示处于用户已授权的写入范围，提交一次 GEN_DATA，立即返回任务 ID |
+| `get_batch(batch_id, include_rows, offset, limit)` | 读取目标库提交／回滚／未知状态、实际主键与摘要；不清理 |
+| `get_request(request_id)` | 超时后按稳定请求标识找回原任务，不重跑 |
+| `reconcile_batch(batch_id, connection, confirm_commit)` | 只读核对 UNKNOWN 批次；明确确认时仅更新本机提交回执 |
+| `preview_cleanup(batch_id, connection)` | 只读核对目标，保存有期限的本机清理计划；不删除 |
+| `execute_cleanup(batch_id, plan_id, plan_hash, connection, confirm_delete)` | 明确授权后复查、事务清理和独立复核；未知状态不重试 |
+| `get_cleanup(batch_id, plan_id)` | 读取原清理计划回执，不连接目标或重删 |
 | `get_task(task_id)` | 查询状态、进度和脱敏错误 |
 
 `connection` 是私有连接文件中的名称，默认 `default`。任务执行时使用明确选择的连接配置，不盲用方案中遗留的旧连接。校验结果的 `scope=CONFIGURATION_ONLY`，未检查项包括真实数据库约束、已有候选、扩展安装和业务工作流。数据库与业务验收仍需执行。
@@ -96,3 +106,11 @@ python -m unittest discover -s integrations/mcp -p test_server.py -v
 ```
 
 真实 stdio 协议测试需要独立空示例库和运行中的 Java 服务。显式设置 `FAKER_MCP_E2E=1`、`FAKER_BASE_URL`、`FAKER_CONNECTIONS_FILE` 后执行 `test_protocol.py`。它会写入并保留示例数据；默认不运行。测试中 H2 只能作为隔离夹具，不能据此宣称所有生产数据库兼容性。
+
+生成前自动执行[数据库预检](generation-preflight.md)，不再只依赖配置级检查。
+
+生成完成后读取[批次账本](generation-batches.md)，核对实际写入主键；batchId 等于 taskId。
+
+提交前选定并保留 request_id；详见[请求幂等与恢复](request-recovery.md)。无键的旧 HTTP 请求不受此保障。
+
+[按批次清理](batch-cleanup.md)只覆盖已核实的原始写入，需先预览并明确授权；普通生成账号不必然具备完整清理元数据权限。

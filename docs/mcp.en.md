@@ -38,19 +38,29 @@ On Windows use `C:/path/to/faker-data/.venv/Scripts/python.exe` as command and f
 
 ## AI workflow
 
-Ask the AI to investigate schema and relationships using your existing database MCP, then read `faker://rules`. For example: “Generate 50 saved orders, 20 submitted and 100 approved, with details and valid existing customers. Use ordinary rules wherever supported. Validate, execute within my authorized test database, and report tasks and verification queries.”
+Ask the AI to inspect the selected database with built-in `list_tables`, `describe_table` and `read_rows`, then read `faker://rules`. A separate database MCP is optional; business relationships and workflow requirements still need evidence. See [inspection limits and HTTP examples](database-inspection.en.md). For example: “Generate 50 saved orders, 20 submitted and 100 approved, with details and valid existing customers. Use ordinary rules wherever supported. Validate, execute within my authorized test database, and report tasks and verification queries.”
 
 | Tool | Behavior |
 | --- | --- |
+| `list_tables(name_contains, limit, offset, connection)` | Page through ordinary tables in the selected database/schema |
+| `describe_table(table, connection)` | Columns, Java types, comments, driver-reported primary/foreign keys and indexes |
+| `read_rows(table, columns, where, order_by, limit, connection)` | Parameterized single-table samples: default 20, maximum 100 rows |
 | `validate_generation(tables)` | Configuration syntax, rules and dependencies only; no target DB connection, writes or extension execution |
+| `preflight_generation(tables,connection)` | Read actual metadata/static unique candidates; check valid/errors/warnings/notChecked; no writes |
 | `save_scheme(name,tables,connection)` | Validate and save an ordinary editable UI scheme; the same name replaces configuration |
 | `get_scheme(scheme_id)` | Read field rules, or list IDs/names when omitted; connection credentials are excluded |
-| `generate_data(scheme_id,connection,confirm_write)` | Submit one GEN_DATA task when `confirm_write=true` is covered by user authorization |
+| `generate_data(scheme_id,connection,confirm_write,request_id)` | Submit one GEN_DATA task when `confirm_write=true` is covered by user authorization |
+| `get_batch(batch_id,include_rows,offset,limit)` | Read commit/rollback/unknown journal and observed keys/fingerprints; no cleanup |
+| `get_request(request_id)` | Locate the original task by stable request ID, without replay |
+| `reconcile_batch(batch_id,connection,confirm_commit)` | Observe UNKNOWN snapshots; explicit confirmation updates only the local receipt |
+| `preview_cleanup(batch_id,connection)` | Target SELECT-only checks and bounded local plan; no deletion |
+| `execute_cleanup(batch_id,plan_id,plan_hash,connection,confirm_delete)` | Authorized recheck/transactional deletion/independent post-check; no UNKNOWN replay |
+| `get_cleanup(batch_id,plan_id)` | Read the original local cleanup receipt without target access |
 | `get_task(task_id)` | Read state, progress and sanitized errors |
 
 `connection` selects a private local profile (default: `default`). Execution uses the explicitly selected profile, not stale saved credentials. Configuration validation does not prove database constraints, candidate availability, installed extensions or business workflow validity. `FINISHED` means generation completed, not business acceptance.
 
-Multiple states are separate schemes and transactions. Do not automatically retry timed-out writes; retain and query task IDs. If submission timed out before returning an ID, inspect Java task records and target data first. No cleanup tool is exposed.
+Multiple states are separate schemes and transactions. Do not automatically retry timed-out writes; retain and query task IDs. If submission timed out before returning an ID, inspect Java task records and target data first. Cleanup is opt-in, bounded to tracked original inserts and requires a reviewed plan; see [cleanup limits](batch-cleanup.en.md).
 
 ## Portable demo
 
@@ -75,3 +85,11 @@ The installer copies public Python code and writes a machine-specific manifest w
 ## Verification
 
 `python -m unittest discover -s integrations/mcp -p test_server.py -v` runs adapter boundary tests. Real stdio protocol tests require an empty dedicated demo schema, a running Java service, and explicit `FAKER_MCP_E2E=1`, `FAKER_BASE_URL`, `FAKER_CONNECTIONS_FILE`. Run `test_protocol.py`; it inserts and retains demo records and is skipped by default. H2 fixture results do not prove native database compatibility.
+
+Generation automatically runs [database preflight](generation-preflight.en.md) before submission, in addition to configuration validation.
+
+Read the [batch journal](generation-batches.en.md) after generation; batchId equals taskId.
+
+Choose and retain request_id before submission; see [idempotency and recovery](request-recovery.en.md). Legacy no-key HTTP requests have no such guarantee.
+
+[Batch cleanup](batch-cleanup.en.md) covers verified original inserts only and requires preview/authorization; ordinary generation credentials may lack metadata visibility.

@@ -47,8 +47,16 @@ class FakerClient:
             raise RuntimeError("Column metadata unavailable")
         return result
 
-    def submit(self, generation_request):
-        return self.request("POST", "publish/task/GEN_DATA", generation_request)
+    def submit(self, generation_request, request_id=None):
+        payload = dict(generation_request)
+        if request_id is not None:
+            payload["requestId"] = request_id
+        if not payload.get("requestId"):
+            raise ValueError("Choose and retain requestId before submitting; reuse it for the same intended request")
+        return self.request("POST", "publish/task/GEN_DATA", payload)
+
+    def request_status(self, request_id):
+        return self.request("GET", "generation/requests/" + urllib.parse.quote(request_id, safe=""))
 
     def status(self, task_id):
         return self.request("GET", "asyncTask/queryProcess/" + urllib.parse.quote(task_id, safe=""))
@@ -75,6 +83,7 @@ def main():
     parser.add_argument("--base-url", default="http://127.0.0.1:8085")
     parser.add_argument("--request", required=True, help="JSON containing dataSource and tables")
     parser.add_argument("--submit", action="store_true", help="Actually submit one generation task")
+    parser.add_argument("--request-id", help="Stable ID for this intended generation; retain it after timeouts/restarts")
     parser.add_argument("--timeout", type=float, default=300)
     args = parser.parse_args()
     with open(args.request, encoding="utf-8") as file:
@@ -90,7 +99,9 @@ def main():
     if not args.submit:
         print(json.dumps(client.tables(source, with_columns=True), ensure_ascii=False, indent=2))
         return
-    task_id = client.submit(payload)
+    if not (args.request_id or payload.get("requestId")):
+        parser.error("--submit requires --request-id or requestId in the private JSON; reuse it for the same intended generation")
+    task_id = client.submit(payload, args.request_id)
     print(json.dumps({"taskId": task_id}), flush=True)
     print(json.dumps(client.wait(task_id, timeout=args.timeout), ensure_ascii=False, indent=2))
 

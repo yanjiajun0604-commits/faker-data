@@ -36,7 +36,7 @@ No business adapter or new generation rule is required:
 
    ```sh
    python examples/ai_client.py --request examples/generate-document-states.json
-   python examples/ai_client.py --request examples/generate-document-states.json --submit --timeout 300
+   python examples/ai_client.py --request examples/generate-document-states.json --submit --request-id example-document-states-run-001 --timeout 300
    ```
 
    The first command checks the connection and reads metadata. Only the second submits a task. After a submission timeout, reconcile the original task and target rows before retrying.

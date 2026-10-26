@@ -20,6 +20,7 @@ public class JdbcServiceFactory {
     }
 
     public static JdbcService getJdbcService(DataSource dataSource, GenerationEngine engine) {
+        if(dataSource==null || dataSource.getType()==null)throw new IllegalArgumentException("Database connection type is required");
         if (dataSource.getType() == JdbcType.MYSQL) {
             return new MySQLJdbcService(dataSource, engine);
         } else if (dataSource.getType() == JdbcType.ORACLE) {

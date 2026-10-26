@@ -1,5 +1,7 @@
 # faker-data · 测试数据，不止随机
 
+当前源码新增[内置只读数据库调查](docs/database-inspection.md)，三个读取工具、数据库预检及原五个生成／方案工具，新用户无需另装 dbquery。该能力属于源码预览，旧发行 JAR 不包含。
+
 当前源码新增：[AI MCP 接入](docs/mcp.md)、按条件精确引用，以及通用[订单示例](examples/create-order-schemes.py)。旧版已发布 JAR 不包含这些改动。
 
 

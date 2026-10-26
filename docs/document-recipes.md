@@ -36,7 +36,7 @@ faker-data 是通用的关系数据生成器。业务表名、字段名、状态
 
    ```sh
    python examples/ai_client.py --request examples/generate-document-states.json
-   python examples/ai_client.py --request examples/generate-document-states.json --submit --timeout 300
+   python examples/ai_client.py --request examples/generate-document-states.json --submit --request-id example-document-states-run-001 --timeout 300
    ```
 
    第一条只检查连接并读取元数据；第二条才提交生成任务。提交超时后先核对原任务和目标记录，不自动重试。
