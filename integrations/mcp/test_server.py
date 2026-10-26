@@ -15,7 +15,7 @@ spec.loader.exec_module(server)
 class AdapterTest(unittest.TestCase):
     def test_database_inspection_tools_are_discoverable_and_read_only(self):
         tools = {tool.name: tool for tool in asyncio.run(server.mcp.list_tools())}
-        for name in ("list_tables", "describe_table", "read_rows"):
+        for name in ("list_tables", "describe_table", "read_rows", "preview_generation", "verify_batch"):
             self.assertIn(name, tools)
             self.assertTrue(tools[name].annotations.readOnlyHint)
             self.assertFalse(tools[name].annotations.destructiveHint)
@@ -79,6 +79,18 @@ class AdapterTest(unittest.TestCase):
         with patch.object(server.api, "request") as request:
             with self.assertRaises(server.ToolError):
                 server.get_cleanup("batch-id", "plan-id", include_rows=True, limit=201)
+            request.assert_not_called()
+
+    def test_preview_and_verification_limits_reject_before_api_access(self):
+        with patch.object(server.api, "request") as request:
+            with self.assertRaises(server.ToolError):
+                server.preview_generation([], rows_per_table=5)
+            with self.assertRaises(server.ToolError):
+                server.preview_generation([{}], rows_per_table=21)
+            with self.assertRaises(server.ToolError):
+                server.verify_batch("../bad")
+            with self.assertRaises(server.ToolError):
+                server.verify_batch("valid-batch", checks=[{}] * 21)
             request.assert_not_called()
 
     def test_scheme_output_excludes_connection_secrets(self):

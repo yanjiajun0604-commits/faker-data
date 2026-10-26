@@ -17,7 +17,10 @@ public final class GenerationPreflight {
     }
 
     public Map<String,Object> check(List<TableVO> tables) {
-        GenerationValidator.validate(tables);
+        return check(tables,false);
+    }
+    public Map<String,Object> check(List<TableVO> tables,boolean preview) {
+        if(preview)GenerationValidator.validateForPreview(tables);else GenerationValidator.validate(tables);
         List<Map<String,Object>> errors=new ArrayList<>(),warnings=new ArrayList<>(),summary=new ArrayList<>();
         for(TableVO table:tables)checkTable(table,errors,warnings,summary);
         return map("valid",errors.isEmpty(),"scope","DATABASE_METADATA_AND_STATIC_VALUES","errors",errors,"warnings",warnings,"tables",summary,

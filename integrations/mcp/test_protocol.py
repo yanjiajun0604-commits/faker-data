@@ -29,7 +29,7 @@ class ProtocolTest(unittest.IsolatedAsyncioTestCase):
             async with ClientSession(read, write) as client:
                 await client.initialize()
                 tools = (await client.list_tools()).tools
-                self.assertEqual({t.name for t in tools}, {"list_tables", "describe_table", "read_rows", "validate_generation", "preflight_generation", "save_scheme", "get_scheme", "generate_data", "get_task", "get_batch", "get_request", "reconcile_batch", "preview_cleanup", "execute_cleanup", "get_cleanup"})
+                self.assertEqual({t.name for t in tools}, {"list_tables", "describe_table", "read_rows", "validate_generation", "preflight_generation", "preview_generation", "save_scheme", "get_scheme", "generate_data", "get_task", "get_batch", "verify_batch", "get_request", "reconcile_batch", "preview_cleanup", "execute_cleanup", "get_cleanup"})
                 self.assertTrue(all(t.outputSchema for t in tools))
                 resources = await client.list_resources()
                 self.assertIn("faker://rules", [str(r.uri) for r in resources.resources])
@@ -56,6 +56,9 @@ class ProtocolTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(validation["scope"], "CONFIGURATION_ONLY")
                 preflight = await call("preflight_generation", recipe)
                 self.assertTrue(preflight["valid"], preflight)
+                preview = await call("preview_generation", {**recipe, "rows_per_table": 2})
+                self.assertTrue(preview["sampleValid"], preview)
+                self.assertEqual("GENERATED_SAMPLE_NO_TARGET_WRITES", preview["scope"])
                 self.assertTrue((await client.call_tool("validate_generation", {"tables": []})).isError)
                 saved = await call("save_scheme", {"name": "MCP protocol demo", **recipe})
                 scheme_id = saved["schemeId"]
@@ -76,6 +79,11 @@ class ProtocolTest(unittest.IsolatedAsyncioTestCase):
                     self.assertTrue(batch["trackable"], batch)
                     self.assertEqual(12, batch["rowCount"])
                     self.assertEqual(3, len(batch["rowPage"]["rows"]))
+                    verified = await call("verify_batch", {"batch_id": task["taskId"], "checks": [
+                        {"kind": "ROW_COUNT", "table": "demo_orders", "expected": 2},
+                        {"kind": "VALUE_SET", "table": "demo_orders", "column": "state", "values": ["SAVED"]},
+                        {"kind": "REFERENCE", "table": "demo_order_items", "targetTable": "demo_orders", "columns": {"order_id": "id"}, "targetScope": "BATCH"}]})
+                    self.assertTrue(verified["valid"], verified)
                     cleanup_connection = os.environ.get("FAKER_MCP_CLEANUP_CONNECTION")
                     if cleanup_connection:
                         plan = await call("preview_cleanup", {"batch_id": task["taskId"], "connection": cleanup_connection})

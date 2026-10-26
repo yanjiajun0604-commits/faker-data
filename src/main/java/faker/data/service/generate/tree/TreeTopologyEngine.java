@@ -27,6 +27,9 @@ public class TreeTopologyEngine {
      * 此方法消耗随机序列，实际生成须使用具有相同初始种子的另一个实例。
      */
     public int count(TreeConfig config) {
+        return count(config,Integer.MAX_VALUE);
+    }
+    public int count(TreeConfig config,int limit) {
         int roots = randomInt(config.getMinRoots(), config.getMaxRoots());
         if (config.isTreeCodeEnabled() && config.getReservedRootCodes() != null
                 && !config.getReservedRootCodes().isEmpty()) {
@@ -34,11 +37,13 @@ public class TreeTopologyEngine {
         }
         long levelCount = Math.max(0, roots);
         long total = levelCount;
+        if(total>limit)throw new IllegalArgumentException("TREE_NODE_LIMIT");
         for (int depth = 0; levelCount > 0 && depth < config.getMaxDepth() - 1; depth++) {
             long nextLevel = 0;
             for (long node = 0; node < levelCount; node++) {
                 nextLevel += Math.max(0, randomInt(config.getMinChildrenPerNode(), config.getMaxChildrenPerNode()));
-                if (total + nextLevel > Integer.MAX_VALUE) {
+                if (total + nextLevel > limit) {
+                    if(limit<Integer.MAX_VALUE)throw new IllegalArgumentException("TREE_NODE_LIMIT");
                     throw new IllegalArgumentException("树节点数量超过支持的上限");
                 }
             }

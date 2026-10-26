@@ -2,7 +2,7 @@
 
 [English](mcp.en.md)
 
-MCP 适配器把现有 Java 生成器接给 AI 客户端。普通字段仍使用已有规则，特殊字段才使用本地扩展。人工 UI 和 MCP 共用普通方案与 `GEN_DATA`。需要使用包含 `/generation/validate` 的本轮源码构建版本；旧的已发布 JAR 不包含这次 MCP 配套改动。
+MCP 适配器把现有 Java 生成器接给 AI 客户端。普通字段仍使用已有规则，特殊字段才使用本地扩展。人工 UI 和 MCP 共用普通方案与 `GEN_DATA`。下面的接口需要当前源码构建版本；已发布 JAR 可能滞后，使用前先核对能力。
 
 ## 安装与启动
 
@@ -62,16 +62,20 @@ AI 应先用内置只读工具理解表结构、关联及业务条件；不必�
 | `read_rows(table, columns, where, order_by, limit, connection)` | 参数化单表样本读取；默认 20、最多 100 行 |
 | `validate_generation(tables)` | 只校验配置、规则和依赖，不连接目标数据库或执行扩展 |
 | `preflight_generation(tables, connection)` | 真实元数据及固定值约束预检；检查 valid/errors/warnings/notChecked，无写入 |
+| `preview_generation(tables, rows_per_table, connection)` | 受限普通规则样本；不写目标库、不执行扩展，检查 sampleValid/notChecked |
 | `save_scheme(name, tables, connection)` | 校验并保存普通方案；同名会更新，人工 UI 可继续使用 |
 | `get_scheme(scheme_id)` | 读取方案规则；省略 ID 则列出名称与 ID，不返回连接凭据 |
 | `generate_data(scheme_id, connection, confirm_write, request_id)` | `confirm_write=true` 表示处于用户已授权的写入范围，提交一次 GEN_DATA，立即返回任务 ID |
 | `get_batch(batch_id, include_rows, offset, limit)` | 读取目标库提交／回滚／未知状态、实际主键与摘要；不清理 |
+| `verify_batch(batch_id, checks, connection)` | 只读核对原始快照及声明的数量／允许值／引用；不修复或改变状态 |
 | `get_request(request_id)` | 超时后按稳定请求标识找回原任务，不重跑 |
 | `reconcile_batch(batch_id, connection, confirm_commit)` | 只读核对 UNKNOWN 批次；明确确认时仅更新本机提交回执 |
 | `preview_cleanup(batch_id, connection)` | 只读核对目标，保存有期限的本机清理计划；不删除 |
 | `execute_cleanup(batch_id, plan_id, plan_hash, connection, confirm_delete)` | 明确授权后复查、事务清理和独立复核；未知状态不重试 |
 | `get_cleanup(batch_id, plan_id)` | 读取原清理计划回执，不连接目标或重删 |
 | `get_task(task_id)` | 查询状态、进度和脱敏错误 |
+
+具体限制和失败语义见[字段诊断、无写入预览与批次核查](preview-verification.md)。预览仅是样本，FINISHED 和快照核查都不能替代业务验收。
 
 `connection` 是私有连接文件中的名称，默认 `default`。任务执行时使用明确选择的连接配置，不盲用方案中遗留的旧连接。校验结果的 `scope=CONFIGURATION_ONLY`，未检查项包括真实数据库约束、已有候选、扩展安装和业务工作流。数据库与业务验收仍需执行。
 

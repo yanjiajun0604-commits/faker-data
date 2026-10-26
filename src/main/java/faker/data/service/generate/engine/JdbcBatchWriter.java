@@ -19,18 +19,21 @@ public final class JdbcBatchWriter {
     private final String sql;
     private final JdbcValueBinder[] binders;
     private final int[] sourcePositions;
+    private final String tableName;
+    private final String[] fieldNames;
 
     public JdbcBatchWriter(String table, List<ColumnInfo> columns) {
+        tableName=table;
         int count=(int)columns.stream().filter(c->!c.isVirtual()).count();
         if(count==0)throw new IllegalArgumentException("PHYSICAL_COLUMN_REQUIRED: "+table);
-        binders = new JdbcValueBinder[count];sourcePositions=new int[count];
+        binders = new JdbcValueBinder[count];sourcePositions=new int[count];fieldNames=new String[count];
         StringBuilder names = new StringBuilder(), parameters = new StringBuilder();
         int persisted=0;
         for (int i=0;i<columns.size();i++) {
             if(columns.get(i).isVirtual()){JdbcValueBinder.compile(columns.get(i),1);continue;}
             if(persisted>0){names.append(',');parameters.append(',');}
             names.append(columns.get(i).getName());parameters.append('?');
-            sourcePositions[persisted]=i;binders[persisted]=JdbcValueBinder.compile(columns.get(i),persisted+1);persisted++;
+            sourcePositions[persisted]=i;fieldNames[persisted]=columns.get(i).getName();binders[persisted]=JdbcValueBinder.compile(columns.get(i),persisted+1);persisted++;
         }
         sql="insert into "+table+" ("+names+") values ("+parameters+")";
     }
@@ -50,7 +53,7 @@ public final class JdbcBatchWriter {
                     for(int row=offset;row<end;row++) {
                         Object[] values=source.apply(row);
                         if(observer!=null)observer.row(values);
-                        for(int col=0;col<binders.length;col++)binders[col].bind(ps,values[sourcePositions[col]]);
+                        for(int col=0;col<binders.length;col++)try{binders[col].bind(ps,values[sourcePositions[col]]);}catch(SQLException|RuntimeException error){throw GenerationProblem.at(error,tableName,fieldNames[col],"JDBC_BIND",null,row,"JDBC_VALUE_BIND_FAILED");}
                         if(batches)ps.addBatch();else {if(observer!=null)observer.beforeWrite(connection);if(ps.executeUpdate()!=1)throw new SQLException("BATCH_INSERT_COUNT_UNEXPECTED");if(observer!=null)observer.written(connection);}
                     }
                     if(batches){

@@ -35,18 +35,22 @@ public final class GenerationValidator {
         if(name==null || !name.matches(qualified?part+"(?:\\."+part+")*":part))throw new IllegalArgumentException("Invalid SQL identifier");
     }
     public static Map<String,Object> validate(List<TableVO> tables) {
+        return validate(tables,false);
+    }
+    public static Map<String,Object> validateForPreview(List<TableVO> tables){return validate(tables,true);}
+    private static Map<String,Object> validate(List<TableVO> tables,boolean preview) {
         structure(tables);
         List<TableVO> ordered=new GenerationPlanner().plan(tables);
         List<Map<String,Object>> summary=new ArrayList<>();
         int fields=0;boolean extensions=false;
         for(TableVO table:ordered) {
-            TableGenerationPlan plan=new TableGenerationPlan(table);
+            TableGenerationPlan plan=new TableGenerationPlan(table,false,preview);
             if(table.getExistingData()!=null)new ExistingDataLoader(table);
             if(table.getParentRows()!=null) {
                 TableVO parent=ordered.stream().filter(t->t.getName().equalsIgnoreCase(table.getParentRows().getTable())).findFirst().get();
-                new ParentRowsSelector(parent,table.getParentRows());
+                new ParentRowsSelector(parent,table.getParentRows(),preview);
             }
-            if(table.getTreeConfig()!=null)new faker.data.service.generate.tree.TreeTopologyEngine(0L).count(table.getTreeConfig());
+            if(table.getTreeConfig()!=null)new faker.data.service.generate.tree.TreeTopologyEngine(0L).count(table.getTreeConfig(),preview?1000:Integer.MAX_VALUE);
             Map<String,Object> item=new LinkedHashMap<>();item.put("table",table.getName());
             item.put("mode",table.getExistingData()!=null?"READ_EXISTING":"GENERATE");
             item.put("requestedRows",table.getParentRows()!=null || table.getExistingData()!=null || table.getTreeConfig()!=null?null:table.getSize());

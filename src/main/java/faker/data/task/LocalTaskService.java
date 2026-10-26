@@ -21,12 +21,14 @@ public class LocalTaskService {
     private final Map<String,AsyncTaskExecutor> executors=new HashMap<>();
     private final ThreadPoolExecutor pool;
     private final TransactionTemplate local;
+    private final ObjectMapper json=new ObjectMapper();
     public LocalTaskService(JdbcTemplate jdbc,ReferenceCache cache,List<AsyncTaskExecutor> handlers,
             @Value("${faker.tasks.workers:2}") int workers,@Value("${faker.tasks.queue-capacity:100}") int capacity){
         if(workers<1 || capacity<1) throw new IllegalArgumentException("任务线程数和队列容量必须大于 0");
         this.jdbc=jdbc;this.cache=cache;
         this.local=new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
         jdbc.execute("CREATE TABLE IF NOT EXISTS faker_generation_request(request_id TEXT PRIMARY KEY,payload_hash TEXT NOT NULL,task_id TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL)");
+        if(!jdbc.queryForList("PRAGMA table_info(faker_task)").stream().anyMatch(c->"error_detail".equals(c.get("name"))))jdbc.execute("ALTER TABLE faker_task ADD COLUMN error_detail TEXT");
         for(AsyncTaskExecutor h:handlers) {
             if(executors.put(h.getTaskPoolType(),h)!=null) throw new IllegalStateException("任务类型重复");
         }
@@ -79,8 +81,10 @@ public class LocalTaskService {
         if(value instanceof List){List<Object> ordered=new ArrayList<>();for(Object item:(List<?>)value)ordered.add(canonical(item));return ordered;}return value;
     }
     public TaskProcessVO query(String id){
-        List<TaskProcessVO> rows=jdbc.query("SELECT * FROM faker_task WHERE id=?",(rs,n)->
-            new TaskProcessVO(rs.getDouble("progress"),TaskState.valueOf(rs.getString("state")),rs.getString("error_msg"),rs.getString("result")),id);
+        List<TaskProcessVO> rows=jdbc.query("SELECT * FROM faker_task WHERE id=?",(rs,n)->{
+            TaskProcessVO result=new TaskProcessVO(rs.getDouble("progress"),TaskState.valueOf(rs.getString("state")),rs.getString("error_msg"),rs.getString("result"));
+            String detail=rs.getString("error_detail");if(result.getState()==TaskState.ERROR && detail!=null)try{result.setDiagnostic(json.readValue(detail,new TypeReference<Map<String,Object>>(){}));}catch(java.io.IOException invalid){throw new IllegalStateException("TASK_DIAGNOSTIC_INVALID",invalid);}return result;
+        },id);
         return rows.isEmpty()?new TaskProcessVO(0D,TaskState.NONE,null,"任务不存在"):rows.get(0);
     }
     public List<Map<String,Object>> types(){
@@ -90,8 +94,9 @@ public class LocalTaskService {
         }return result;
     }
     private void update(String id,TaskState state,double progress,String result,String error){
-        jdbc.update("UPDATE faker_task SET state=?,progress=?,result=?,error_msg=?,updated_at=? WHERE id=?",state.name(),progress,result,error,System.currentTimeMillis(),id);
+        jdbc.update("UPDATE faker_task SET state=?,progress=?,result=?,error_msg=?,error_detail=NULL,updated_at=? WHERE id=?",state.name(),progress,result,error,System.currentTimeMillis(),id);
     }
+    private void failed(String id,double progress,String result,Throwable error){Map<String,Object> detail=faker.data.service.generate.engine.GenerationProblem.find(error);jdbc.update("UPDATE faker_task SET state='ERROR',progress=?,result=?,error_msg=?,error_detail=?,updated_at=? WHERE id=?",progress,result,safeError(error),detail==null?null:TargetRowSnapshot.json(detail),System.currentTimeMillis(),id);}
     private class Job implements Runnable {
         final String id;final AsyncTaskExecutor executor;final Object args;
         Job(String id,AsyncTaskExecutor executor,Object args){this.id=id;this.executor=executor;this.args=args;}
@@ -102,7 +107,7 @@ public class LocalTaskService {
                 executor.execute(args,monitor);
                 if(!monitor.terminal) update(id,TaskState.FINISHED,100,"执行完成",null);
             }catch(Throwable ex){
-                update(id,TaskState.ERROR,monitor.progress,"执行失败",safeError(ex));
+                failed(id,monitor.progress,"执行失败",ex);
                 if(ex instanceof VirtualMachineError) throw (VirtualMachineError)ex;
             }finally{
                 try{
@@ -130,7 +135,7 @@ public class LocalTaskService {
         public void finish(String result,Object detail){}
         public void canceling(String result,Object detail){canceled(result,detail);}
         public void canceled(String result,Object detail){terminal=true;update(id,TaskState.CANCELED,progress,result,null);}
-        public void error(String result,Throwable ex){terminal=true;update(id,TaskState.ERROR,progress,result,safeError(ex));}
+        public void error(String result,Throwable ex){terminal=true;failed(id,progress,result,ex);}
         public boolean isFinish(){return terminal;}
         public TaskProcessVO queryProcess(String taskId){return query(taskId);}
     }

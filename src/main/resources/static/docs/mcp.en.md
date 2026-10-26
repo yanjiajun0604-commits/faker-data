@@ -2,7 +2,7 @@
 
 [中文](mcp.md)
 
-The stdio adapter connects AI clients to the existing Java `GEN_DATA` engine. Normal rules generate ordinary fields; trusted local extensions only fill unsupported field values. The manual UI and MCP share ordinary schemes. Build the current source: older published JARs do not include the new `/generation/validate` endpoint.
+The stdio adapter connects AI clients to the existing Java `GEN_DATA` engine. Normal rules generate ordinary fields; trusted local extensions only fill unsupported field values. The manual UI and MCP share ordinary schemes. Build current source for the interfaces below; published JARs may lag behind and their capabilities must be checked before use.
 
 ## Setup
 
@@ -47,16 +47,20 @@ Ask the AI to inspect the selected database with built-in `list_tables`, `descri
 | `read_rows(table, columns, where, order_by, limit, connection)` | Parameterized single-table samples: default 20, maximum 100 rows |
 | `validate_generation(tables)` | Configuration syntax, rules and dependencies only; no target DB connection, writes or extension execution |
 | `preflight_generation(tables,connection)` | Read actual metadata/static unique candidates; check valid/errors/warnings/notChecked; no writes |
+| `preview_generation(tables,rows_per_table,connection)` | Restricted ordinary-rule sample with no target writes or extension execution; inspect sampleValid/notChecked |
 | `save_scheme(name,tables,connection)` | Validate and save an ordinary editable UI scheme; the same name replaces configuration |
 | `get_scheme(scheme_id)` | Read field rules, or list IDs/names when omitted; connection credentials are excluded |
 | `generate_data(scheme_id,connection,confirm_write,request_id)` | Submit one GEN_DATA task when `confirm_write=true` is covered by user authorization |
 | `get_batch(batch_id,include_rows,offset,limit)` | Read commit/rollback/unknown journal and observed keys/fingerprints; no cleanup |
+| `verify_batch(batch_id,checks,connection)` | Read committed original snapshots and declared count/value/reference checks; no repair/state change |
 | `get_request(request_id)` | Locate the original task by stable request ID, without replay |
 | `reconcile_batch(batch_id,connection,confirm_commit)` | Observe UNKNOWN snapshots; explicit confirmation updates only the local receipt |
 | `preview_cleanup(batch_id,connection)` | Target SELECT-only checks and bounded local plan; no deletion |
 | `execute_cleanup(batch_id,plan_id,plan_hash,connection,confirm_delete)` | Authorized recheck/transactional deletion/independent post-check; no UNKNOWN replay |
 | `get_cleanup(batch_id,plan_id)` | Read the original local cleanup receipt without target access |
 | `get_task(task_id)` | Read state, progress and sanitized errors |
+
+See [field diagnostics, no-write preview and verification](preview-verification.en.md) for exact limits and failure semantics. Preview is a sample; FINISHED and snapshot checks do not prove business acceptance.
 
 `connection` selects a private local profile (default: `default`). Execution uses the explicitly selected profile, not stale saved credentials. Configuration validation does not prove database constraints, candidate availability, installed extensions or business workflow validity. `FINISHED` means generation completed, not business acceptance.
 

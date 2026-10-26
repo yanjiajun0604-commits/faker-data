@@ -84,7 +84,12 @@ class JavaAPI:
             raise ToolError("Java service returned invalid JSON. Check FAKER_BASE_URL and the Java version.") from None
         if not isinstance(result, dict) or result.get("code") != 0:
             message = result.get("msg", "Unknown Java API error") if isinstance(result, dict) else "Invalid Java API result"
-            raise ToolError(str(self.scrub(message)))
+            detail = {"message": self.scrub(message)}
+            if isinstance(result, dict):
+                for key in ("diagnostic", "error", "reason"):
+                    if result.get(key) is not None:
+                        detail[key] = self.scrub(result[key])
+            raise ToolError(json.dumps(detail, ensure_ascii=False))
         return result.get("data")
 
 
@@ -139,6 +144,14 @@ def preflight_generation(tables: list[dict], connection: str = "default") -> dic
     """Read target metadata and check required/unknown/generated columns, static lengths/numeric precision and provable unique conflicts. No writes or rule/extension execution. Check valid/errors/warnings/notChecked; dynamic values and business semantics are not proven."""
     source = api.connection(connection)
     return api.scrub(api.request("/generation/preflight", {"dataSource": source, "tables": tables}))
+
+
+@mcp.tool(annotations=READ, structured_output=True)
+def preview_generation(tables: list[dict], rows_per_table: int = 5, connection: str = "default") -> dict[str, Any]:
+    """Generate a bounded ordinary-rule sample with NO target INSERT/DDL, no write-then-rollback, no journal/task creation and no extension execution. rows_per_table 1-20 limits independent roots; parent expansion follows sampled parents (1000 total rows/50000 cells maximum). Restricted built-in conditions/rules only; extensions are omitted, unsupported custom/regex rules rejected. Inspect sampleValid, preflight, omitted fields and notChecked; this is not full-task or business acceptance. Database reads use the private profile."""
+    if not 1 <= rows_per_table <= 20 or not 1 <= len(tables) <= 20:
+        raise ToolError("Preview supports 1-20 tables and rows_per_table 1-20.")
+    return api.scrub(api.request("/generation/preview", {"dataSource": api.connection(connection), "tables": tables, "rowsPerTable": rows_per_table}))
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False), structured_output=True)
@@ -216,6 +229,14 @@ def get_batch(batch_id: str, include_rows: bool = False, offset: int = 0, limit:
     if include_rows:
         result["rowPage"] = api.request("/batches/" + batch_id + "/rows?offset=" + str(offset) + "&limit=" + str(limit))
     return api.scrub(result)
+
+
+@mcp.tool(annotations=READ, structured_output=True)
+def verify_batch(batch_id: str, checks: list[dict] | None = None, connection: str = "default") -> dict[str, Any]:
+    """Read-only verification of original COMMITTED batch keys/schema/full and immutable snapshots (max 10000 rows), without repair/recovery/cleanup. Optional max 20 checks: {kind:ROW_COUNT,table,expected}; {kind:VALUE_SET,table,column,values}; {kind:REFERENCE,table,targetTable,columns:{child:parentPK},targetScope:BATCH|DATABASE,allowNull:false}. References cover the complete parent PK; BATCH means actual membership, DATABASE means existence. Inspect valid/snapshotStatus/checks; excludes later derived rows and undeclared workflow semantics."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", batch_id) or checks is not None and len(checks) > 20:
+        raise ToolError("Invalid batch ID or more than 20 verification checks.")
+    return api.scrub(api.request("/batches/" + batch_id + "/verify", {"dataSource": api.connection(connection), "checks": checks or []}))
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False), structured_output=True)

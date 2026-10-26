@@ -16,7 +16,7 @@ public final class GenerationPlanner {
             for(ColumnInfo column:table.getColumns())column.setDepended(false);
         }
         List<TableVO> ordered=orderTables(tables);
-        for(TableVO table:ordered)table.setColumns(sortColumnsByConditionDeps(table.getColumns()));
+        for(TableVO table:ordered)try{table.setColumns(sortColumnsByConditionDeps(table.getColumns()));}catch(RuntimeException error){throw GenerationProblem.at(error,table.getName(),null,"columns",null,null,"DEPENDENCY_CYCLE");}
         return ordered;
     }
 
@@ -46,7 +46,8 @@ public final class GenerationPlanner {
                 if (allRegs == null || allRegs.isEmpty()) {
                     continue;
                 }
-                visitRules(allRegs, reg -> {
+                visitRules(allRegs, (reg,path) -> {
+                    try{
                     if(reg.getRefMatch()!=null && !"REF.OTHER_TABLE".equals(reg.getCode()))
                         throw new IllegalArgumentException("refMatch requires REF.OTHER_TABLE");
                     String[] refArr = reg.getRefOtherTableColumn();
@@ -77,6 +78,7 @@ public final class GenerationPlanner {
                             });
                         }
                     }
+                    }catch(RuntimeException error){throw GenerationProblem.at(error,tableVO.getName(),column.getName(),path,reg==null?null:reg.getCode(),null,"INVALID_RULE_DEPENDENCY");}
                 });
             }
         }
@@ -118,12 +120,13 @@ public final class GenerationPlanner {
         return res;
     }
 
-    private void visitRules(List<MetaTypeVO> rules,java.util.function.Consumer<MetaTypeVO> visitor) {
+    private void visitRules(List<MetaTypeVO> rules,java.util.function.BiConsumer<MetaTypeVO,String> visitor) {visitRules(rules,visitor,"regs");}
+    private void visitRules(List<MetaTypeVO> rules,java.util.function.BiConsumer<MetaTypeVO,String> visitor,String path) {
         if(rules==null)return;
-        for(MetaTypeVO rule:rules) {
-            visitor.accept(rule);
-            visitRules(rule.getOnTrue(),visitor);
-            visitRules(rule.getOnFalse(),visitor);
+        for(int index=0;index<rules.size();index++) {
+            MetaTypeVO rule=rules.get(index);String location=path+"["+index+"]";visitor.accept(rule,location);
+            visitRules(rule.getOnTrue(),visitor,location+".onTrue");
+            visitRules(rule.getOnFalse(),visitor,location+".onFalse");
         }
     }
 
