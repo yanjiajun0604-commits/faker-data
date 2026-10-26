@@ -1,0 +1,235 @@
+{
+  "dataSource": {
+    "type": "MYSQL",
+    "url": "jdbc:mysql://127.0.0.1:3306/faker_demo?serverTimezone=UTC",
+    "username": "faker_demo",
+    "password": ""
+  },
+  "tables": [
+    {
+      "name": "demo_lookup_item",
+      "size": 0,
+      "parentRows": {
+        "table": "demo_lookup_document",
+        "condition": "#state == 'SUBMITTED'",
+        "rowsPerParent": 2
+      },
+      "columns": [
+        {
+          "name": "id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "FIX.UUID"
+            }
+          ]
+        },
+        {
+          "name": "document_id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REF.OTHER_TABLE",
+              "refOtherTableColumn": [
+                "demo_lookup_document",
+                "id"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "user_id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REF.OTHER_TABLE",
+              "refOtherTableColumn": [
+                "demo_lookup_document",
+                "user_id"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "demo_lookup_document",
+      "size": 6,
+      "columns": [
+        {
+          "name": "id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "FIX.UUID"
+            }
+          ]
+        },
+        {
+          "name": "sequence_no",
+          "javaType": "java.lang.Long",
+          "dbType": "bigint",
+          "length": 19,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REG.INCREMENT_NUM",
+              "minSize": 1,
+              "step": 1
+            }
+          ]
+        },
+        {
+          "name": "state",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "COND.EXPR",
+              "condition": "between(#sequence_no,1,2)",
+              "onTrue": [
+                {
+                  "code": "RES.INPUTAREA",
+                  "inputs": [
+                    {
+                      "value": "SAVED",
+                      "weight": 1
+                    }
+                  ]
+                }
+              ],
+              "onFalse": [
+                {
+                  "code": "COND.EXPR",
+                  "condition": "between(#sequence_no,3,4)",
+                  "onTrue": [
+                    {
+                      "code": "RES.INPUTAREA",
+                      "inputs": [
+                        {
+                          "value": "SUBMITTED",
+                          "weight": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "onFalse": [
+                    {
+                      "code": "RES.INPUTAREA",
+                      "inputs": [
+                        {
+                          "value": "APPROVED",
+                          "weight": 1
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "user_id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REF.OTHER_TABLE",
+              "refOtherTableColumn": [
+                "demo_lookup_user",
+                "id"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "user_name",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REF.OTHER_TABLE",
+              "refOtherTableColumn": [
+                "demo_lookup_user",
+                "display_name"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "org_id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REF.OTHER_TABLE",
+              "refOtherTableColumn": [
+                "demo_lookup_user",
+                "org_id"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "demo_lookup_user",
+      "existingData": {
+        "where": {
+          "enabled": 1
+        },
+        "orderBy": [
+          "id"
+        ],
+        "maxRows": 10000
+      },
+      "columns": [
+        {
+          "name": "id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": []
+        },
+        {
+          "name": "display_name",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": []
+        },
+        {
+          "name": "org_id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 40,
+          "nullable": 0,
+          "regs": []
+        }
+      ]
+    }
+  ]
+}

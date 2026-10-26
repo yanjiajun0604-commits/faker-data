@@ -28,6 +28,9 @@ public class LocalStorageConfig {
         ds.setUrl("jdbc:sqlite:"+dir.resolve("faker-data.db"));
         JdbcTemplate jdbc=new JdbcTemplate(ds);
         jdbc.execute("CREATE TABLE IF NOT EXISTS faker_scheme(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL UNIQUE,data_source_json TEXT,tables_json TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)");
+        java.util.Set<String> schemeColumns=new java.util.HashSet<>(jdbc.query("PRAGMA table_info(faker_scheme)",(rs,n)->rs.getString("name")));
+        if(!schemeColumns.contains("scheme_kind"))jdbc.execute("ALTER TABLE faker_scheme ADD COLUMN scheme_kind TEXT NOT NULL DEFAULT 'RULES'");
+        if(!schemeColumns.contains("extension_json"))jdbc.execute("ALTER TABLE faker_scheme ADD COLUMN extension_json TEXT");
         jdbc.execute("CREATE TABLE IF NOT EXISTS faker_task(id TEXT PRIMARY KEY,type TEXT NOT NULL,state TEXT NOT NULL,progress REAL NOT NULL,result TEXT,error_msg TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)");
         jdbc.update("UPDATE faker_task SET state='ERROR',error_msg='上次运行中断，请核对目标数据后重新提交',result='运行中断',updated_at=? WHERE state IN ('WAITING','PROCESSING','CANCELING')",System.currentTimeMillis());
         return ds;

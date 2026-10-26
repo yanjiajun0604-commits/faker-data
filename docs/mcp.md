@@ -1,0 +1,98 @@
+# 通过 MCP 生成业务测试数据
+
+[English](mcp.en.md)
+
+MCP 适配器把现有 Java 生成器接给 AI 客户端。普通字段仍使用已有规则，特殊字段才使用本地扩展。人工 UI 和 MCP 共用普通方案与 `GEN_DATA`。需要使用包含 `/generation/validate` 的本轮源码构建版本；旧的已发布 JAR 不包含这次 MCP 配套改动。
+
+## 安装与启动
+
+需要 Java 8+、Python 3.10+，以及支持 stdio MCP 的 AI 客户端。在项目根目录执行：
+
+```sh
+java -jar faker-data-0.1.1.jar
+```
+
+另一个终端安装适配器。Windows：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r integrations/mcp/requirements.txt
+```
+
+macOS/Linux：
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r integrations/mcp/requirements.txt
+```
+
+把 `integrations/mcp/connections.example.json` 复制到仓库外的私人目录，填写测试数据库连接。示例中的密码是占位符。连接文件不要提交或发送给 AI；Java 数据目录中的已保存方案也包含连接配置，应当保护。
+
+客户端的 MCP JSON 配置示例（替换两个路径为本机绝对路径；Windows 使用正斜杠）：
+
+```json
+{
+  "mcpServers": {
+    "faker-data": {
+      "command": "C:/path/to/faker-data/.venv/Scripts/python.exe",
+      "args": ["C:/path/to/faker-data/integrations/mcp/server.py"],
+      "env": {
+        "FAKER_BASE_URL": "http://127.0.0.1:8085",
+        "FAKER_CONNECTIONS_FILE": "C:/private/faker-connections.json"
+      }
+    }
+  }
+}
+```
+
+macOS/Linux 的 command 改为 `/path/to/faker-data/.venv/bin/python`。不同客户端配置位置不同，请放到该客户端的 MCP 设置中。适配器仅通过 stdio 提供 MCP，调用本机 Java HTTP 服务，不开放新的网络监听端口。该版本不自动启动 Java 服务。
+
+## AI 如何使用
+
+可以向 AI 描述：
+
+> 使用 dbquery 阅读我的测试库结构。参考 faker-data 的 faker://rules，用已有规则生成订单和明细：保存 50、提交中 20、完成 100。客户引用库中启用的客户。先检查规则，普通字段不要写扩展，确认在我授权的测试库生成，并返回任务结果和验收查询。
+
+AI 应先用既有数据库 MCP 理解表结构、关联及业务条件；本项目不新增数据库调查工具。读取 `faker://rules` 后，为三种状态分别准备普通方案。
+
+| MCP 工具 | 作用 |
+| --- | --- |
+| `validate_generation(tables)` | 只校验配置、规则和依赖，不连接目标数据库或执行扩展 |
+| `save_scheme(name, tables, connection)` | 校验并保存普通方案；同名会更新，人工 UI 可继续使用 |
+| `get_scheme(scheme_id)` | 读取方案规则；省略 ID 则列出名称与 ID，不返回连接凭据 |
+| `generate_data(scheme_id, connection, confirm_write)` | `confirm_write=true` 表示处于用户已授权的写入范围，提交一次 GEN_DATA，立即返回任务 ID |
+| `get_task(task_id)` | 查询状态、进度和脱敏错误 |
+
+`connection` 是私有连接文件中的名称，默认 `default`。任务执行时使用明确选择的连接配置，不盲用方案中遗留的旧连接。校验结果的 `scope=CONFIGURATION_ONLY`，未检查项包括真实数据库约束、已有候选、扩展安装和业务工作流。数据库与业务验收仍需执行。
+
+超时后写入结果可能未知，不要自动重试保存或生成；保存可以按名称核对，生成应保留已拿到的任务 ID 查询。若任务 ID 都未返回，先核对 Java 任务记录与目标数据。三种状态是三次独立事务，不承诺跨任务整体回滚。
+
+## 可运行的通用案例
+
+先在独立的空测试库执行 [订单示例 SQL](../examples/mysql-order-schema.sql)，再生成三个普通配置：
+
+```sh
+python examples/create-order-schemes.py --output order-schemes --counts 50 20 100
+```
+
+让 AI 读取输出文件中的 `tables`，通过上述 MCP 工具校验、保存、执行即可。候选客户表只读；每张订单生成两条明细、输入/输出各一条内容记录和一条引用记录。引用由当前订单 ID 与 INPUT/OUTPUT 类型精确匹配，普通 ID 无需扩展。
+
+这些状态与引用用于演示数据关系，不代表真实业务工作流引擎。要生成某个系统可继续审批的数据，仍需分析并满足该系统的真实运行协议。
+
+需要二进制演示时：
+
+```sh
+python examples/install-field-extension.py --root ./data/extensions --demo orders
+python examples/create-order-schemes.py --output order-schemes-binary --counts 50 20 100 --with-binary
+java -jar faker-data-0.1.1.jar --faker.extensions.enabled=true
+```
+
+安装命令只复制公开 Python 示例和生成本机 manifest，不启用或运行扩展；目标目录必须与 Java 的 `faker.extensions.root` 一致。安装器不覆盖已有扩展。二进制是公开演示格式，普通 UUID、状态及关联仍由规则引擎生成。扩展是可信本地代码，不是沙箱。
+
+## 验证
+
+```sh
+python -m unittest discover -s integrations/mcp -p test_server.py -v
+```
+
+真实 stdio 协议测试需要独立空示例库和运行中的 Java 服务。显式设置 `FAKER_MCP_E2E=1`、`FAKER_BASE_URL`、`FAKER_CONNECTIONS_FILE` 后执行 `test_protocol.py`。它会写入并保留示例数据；默认不运行。测试中 H2 只能作为隔离夹具，不能据此宣称所有生产数据库兼容性。

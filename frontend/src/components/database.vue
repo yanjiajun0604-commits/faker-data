@@ -647,6 +647,8 @@ export default {
 
   methods: {
     ruleLabel(code) {
+      if (code === null || typeof code === 'undefined') return t('空值');
+      if (code === 'EXT.FIELD') return t('字段扩展');
       return { "FIX.UUID": "UUID", "FIX.PEOPLE_NAME": t("中文姓名"), "FIX.TEL": t("手机号"), "FIX.IDENTIF": t("身份证样式"), "REG.RANGE_NUM": t("随机整数"), "REG.INCREMENT_NUM": t("递增序列"), "REG.RANGE_STRING": t("随机字符串"), "REG.STYLE": t("正则生成"), "REG.DATE": t("日期范围"), "RES.INPUTAREA": t("常量 / 候选值"), "REF.SELF_COLUMN": t("同表字段引用"), "REF.OTHER_TABLE": t("跨表关联"), "COND.EXPR": t("条件规则"), "STRUCT.TREE_PARENT": t("树形父节点"), "STRUCT.TREE_CODE": t("树形编码"), "REG.TREE_CODE": t("树形编码") }[code] || code || t("未配置");
     },
 
@@ -749,7 +751,8 @@ export default {
 
       for (const table of this.selectedTables) {
         // 1. 数据量校验
-        if (!table.treeConfig && (!table.size || table.size <= 0)) {
+        if (table.existingData) continue;
+        if (!table.treeConfig && !table.parentRows && (!table.size || table.size <= 0)) {
           errors.push(
             t("表【{p0}】的数据量必须大于 0，当前为 {p1}", {p0: table.name, p1: table.size || 0})
           );
@@ -979,7 +982,7 @@ export default {
       this.currItemTable.tableName = tableName;
       this.currItemTable.columnName = colRow.name;
       // 深拷贝已有规则到 currItem，组件内部会再次深拷贝
-      this.currItem = { ...existingReg };
+      this.currItem = { code: null, ...existingReg };
       this.dialogVisible = true;
     },
 

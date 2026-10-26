@@ -4,6 +4,7 @@ import faker.data.cache.ReferenceCache;
 import faker.data.domain.*;
 import faker.data.service.generate.*;
 import faker.data.service.generate.tree.*;
+import faker.data.extension.FieldExtensionMetaType;
 import org.springframework.expression.Expression;
 import java.util.*;
 
@@ -14,8 +15,15 @@ final class TableGenerationPlan {
     private final ColumnPlan[] columns;
     private final Map<String,Integer> indices = new HashMap<>();
     private final String lowerTable;
+    final Map<String,Map<String,Long>> ruleUses=new LinkedHashMap<>();
+    boolean hasFieldExtensions;
+    private final boolean auditRules;
 
     TableGenerationPlan(TableVO table) {
+        this(table,false);
+    }
+    TableGenerationPlan(TableVO table,boolean auditRules) {
+        this.auditRules=auditRules;
         this.table=table;
         lowerTable=table.getName().toLowerCase(Locale.ROOT);
         columns=new ColumnPlan[table.getColumns().size()];
@@ -24,7 +32,7 @@ final class TableGenerationPlan {
             indices.put(c.getName().toLowerCase(Locale.ROOT),i);
         }
         for(int i=0;i<columns.length;i++)columns[i]=new ColumnPlan(table.getColumns().get(i));
-        writer=new JdbcBatchWriter(table.getName(),table.getColumns());
+        writer=table.getExistingData()==null?new JdbcBatchWriter(table.getName(),table.getColumns()):null;
     }
 
     RowCursor cursor(String task, ReferenceCache cache, Map<String,List<String>> rowIds) {
@@ -39,6 +47,19 @@ final class TableGenerationPlan {
             this.source=source;name=source.getName();lowerName=name.toLowerCase(Locale.ROOT);
             cacheKey=lowerTable+":"+lowerName;
             rules=prepareRules(source.getRegs());
+            rejectNestedExtensions(source.getRegs(),false);
+            for(MetaTypeVO rule:source.getRegs()==null?Collections.<MetaTypeVO>emptyList():source.getRegs())if("EXT.FIELD".equals(rule.getCode())) {
+                if(source.getRegs().size()!=1 || source.isDepended())throw new IllegalArgumentException("FIELD_EXTENSION_MUST_BE_STANDALONE_AND_NOT_REFERENCED");
+                hasFieldExtensions=true;
+            }
+        }
+    }
+
+    private void rejectNestedExtensions(List<MetaTypeVO> rules,boolean nested) {
+        if(rules==null)return;
+        for(MetaTypeVO rule:rules) {
+            if(nested && "EXT.FIELD".equals(rule.getCode()))throw new IllegalArgumentException("FIELD_EXTENSION_MUST_BE_STANDALONE_AND_NOT_REFERENCED");
+            rejectNestedExtensions(rule.getOnTrue(),true);rejectNestedExtensions(rule.getOnFalse(),true);
         }
     }
 
@@ -54,30 +75,39 @@ final class TableGenerationPlan {
         final IMetaType strategy;
         final Integer selfIndex;
         final String referenceTable;
+        final ReferenceLookup lookup;
         final CondExprMetaType condition;
         final Expression expression;
         final PreparedRule[] yes,no;
         PreparedRule(MetaTypeVO source) {
+            RuleArguments.check(source);
             this.source=source;
             strategy=MetaTypeFactory.getMetaTypeImpl(source);
             if(strategy==null)throw new IllegalArgumentException("不支持的生成规则："+source.getCode());
             selfIndex=source.getRefSelfColumn()==null?null:indices.get(source.getRefSelfColumn().toLowerCase(Locale.ROOT));
+            if(source.getRefSelfColumn()!=null && selfIndex==null)throw new IllegalArgumentException("Unknown refSelfColumn: "+source.getRefSelfColumn());
             String[] ref=source.getRefOtherTableColumn();
             referenceTable=ref==null || ref.length==0?null:ref[0].toLowerCase(Locale.ROOT);
+            lookup=source.getRefMatch()==null?null:new ReferenceLookup(source);
             condition=strategy instanceof CondExprMetaType?(CondExprMetaType)strategy:null;
             expression=condition==null?null:condition.prepare(source);
             yes=condition==null?null:prepareRules(source.getOnTrue());
             no=condition==null?null:prepareRules(source.getOnFalse());
         }
         Object evaluate(RowCursor row, ColumnPlan column) {
+            if(auditRules)ruleUses.computeIfAbsent(column.name,k->new LinkedHashMap<>()).merge(source.getCode()==null?"EMPTY":source.getCode(),1L,Long::sum);
             Object self=selfIndex==null?null:row.generateColumn(selfIndex);
             // 递归同表引用会复用上下文，必须在递归返回后恢复当前规则参数。
             row.args.put("currentReg",source);
             if(source.getRefSelfColumn()!=null)row.args.put("refSelfValue",self);else row.args.remove("refSelfValue");
             if(referenceTable!=null) {
                 List<String> ids=row.rowIds.get(referenceTable);
-                if(ids==null || ids.isEmpty())throw new IllegalArgumentException("被引用表没有可用数据："+referenceTable);
-                row.args.put("refRowId",ids.get(row.index%ids.size()));
+                if(ids==null)ids=Collections.emptyList();
+                if(lookup==null && ids.isEmpty())throw new IllegalArgumentException("被引用表没有可用数据："+referenceTable);
+                boolean boundParent=table.getParentRows()!=null && referenceTable.equals(table.getParentRows().getTable().toLowerCase(Locale.ROOT));
+                String selected=lookup==null?(boundParent?row.parentRowId:ids.get(row.index%ids.size())):
+                    lookup.select(row.task,row.cache,ids,name->row.generateColumn(indices.get(name.toLowerCase(Locale.ROOT))));
+                row.args.put("refRowId",selected);
             } else row.args.remove("refRowId");
             if(condition!=null) {
                 PreparedRule[] branch=condition.evaluate(expression,source,row.values)?yes:no;
@@ -89,16 +119,18 @@ final class TableGenerationPlan {
     }
 
     /** 保留既有字符串拼接语义；单规则不再分配 StringBuilder。 */
-    private String concatenate(PreparedRule[] rules, RowCursor row, ColumnPlan column, boolean emptyAsNull) {
+    private Object concatenate(PreparedRule[] rules, RowCursor row, ColumnPlan column, boolean emptyAsNull) {
         if(rules.length==0)return emptyAsNull?null:"";
         if(rules.length==1) {
             Object value=rules[0].evaluate(row,column);
+            if(value instanceof FieldExtensionMetaType.Request)return value;
             String text=value==null?"":value.toString();
             return emptyAsNull && text.isEmpty()?null:text;
         }
         StringBuilder text=new StringBuilder();
         for(PreparedRule rule:rules) {
             Object value=rule.evaluate(row,column);
+            if(value instanceof FieldExtensionMetaType.Request)throw new IllegalArgumentException("FIELD_EXTENSION_CANNOT_BE_CONCATENATED");
             if(value!=null)text.append(value);
         }
         return emptyAsNull && text.length()==0?null:text.toString();
@@ -115,13 +147,19 @@ final class TableGenerationPlan {
         final byte[] states=new byte[columns.length];
         int index;
         String rowId;
+        String parentRowId;
         RowCursor(String task, ReferenceCache cache, Map<String,List<String>> rowIds) {
             this.task=task;this.cache=cache;this.rowIds=rowIds;
         }
         Object[] next(int index, TreeContext tree, TreeState treeState) {
+            return next(index,tree,treeState,null);
+        }
+        Object[] next(int index, TreeContext tree, TreeState treeState,String parentRowId) {
             this.index=index;
+            this.parentRowId=parentRowId;
             Arrays.fill(states,(byte)0);Arrays.fill(output,null);
             values.clear();args.clear();rowId=null;
+            values.put("__rowIndex",index);
             if(!table.getRefOtherTables().isEmpty()) {
                 rowId=UUID.randomUUID().toString();
                 rowIds.computeIfAbsent(lowerTable,k->new ArrayList<>()).add(rowId);
@@ -140,7 +178,7 @@ final class TableGenerationPlan {
             if(states[position]==1)throw new IllegalArgumentException("同表字段存在循环引用："+columns[position].name);
             states[position]=1;
             ColumnPlan column=columns[position];
-            String value=concatenate(column.rules,this,column,true);
+            Object value=concatenate(column.rules,this,column,true);
             output[position]=value;states[position]=2;
             values.put(column.name,value);
             if(!column.lowerName.equals(column.name))values.put(column.lowerName,value);

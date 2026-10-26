@@ -22,6 +22,11 @@ public class MetaTypeVO {
     //数据引用其他表字段
     private String[] refOtherTableColumn;
 
+    /** 来源字段 -> {field: 本行字段} 或 {value: 常量}；省略时保留轮转引用。 */
+    private java.util.Map<String, java.util.Map<String,Object>> refMatch;
+    private String refOnMissing;
+    private String refOnMultiple;
+
     //同表字段引用：被引用的本表列名（如 姓氏 引用 name）
     private String refSelfColumn;
 
@@ -36,6 +41,10 @@ public class MetaTypeVO {
 
     //手动输入候选项列表（每项含值 + 权重，替代原 textarea 多行文本）
     private List<InputItem> inputs;
+
+    /** EXT.FIELD：仅为本字段选择已安装的可信本地扩展。 */
+    private String extension;
+    private java.util.Map<String,Object> extensionParameters;
 
     // ---- 条件规则新增字段 ----
     // SpEL 条件表达式（如 "#user_type == 'vip'"），null = 非条件规则

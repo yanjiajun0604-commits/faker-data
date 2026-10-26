@@ -1,0 +1,276 @@
+{
+  "dataSource": {
+    "type": "MYSQL",
+    "url": "jdbc:mysql://127.0.0.1:3306/faker_demo?serverTimezone=UTC",
+    "username": "faker_demo",
+    "password": ""
+  },
+  "tables": [
+    {
+      "name": "demo_document_line",
+      "size": 340,
+      "columns": [
+        {
+          "name": "id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 36,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "FIX.UUID"
+            }
+          ]
+        },
+        {
+          "name": "document_id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 36,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REF.OTHER_TABLE",
+              "refOtherTableColumn": [
+                "demo_document",
+                "id"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "document_state",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 16,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REF.OTHER_TABLE",
+              "refOtherTableColumn": [
+                "demo_document",
+                "state"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "amount",
+          "javaType": "java.math.BigDecimal",
+          "dbType": "decimal",
+          "length": 12,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "RES.INPUTAREA",
+              "inputs": [
+                {
+                  "value": "12.50",
+                  "weight": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "demo_document_extension",
+      "size": 170,
+      "columns": [
+        {
+          "name": "id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 36,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REF.OTHER_TABLE",
+              "refOtherTableColumn": [
+                "demo_document",
+                "id"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "category",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 32,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "RES.INPUTAREA",
+              "inputs": [
+                {
+                  "value": "EXPENSE",
+                  "weight": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "state_copy",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 16,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REF.OTHER_TABLE",
+              "refOtherTableColumn": [
+                "demo_document",
+                "state"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "demo_document",
+      "size": 170,
+      "columns": [
+        {
+          "name": "id",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 36,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "FIX.UUID"
+            }
+          ]
+        },
+        {
+          "name": "state",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 16,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "COND.EXPR",
+              "condition": "between(#sequence_no,1,50)",
+              "onTrue": [
+                {
+                  "code": "RES.INPUTAREA",
+                  "inputs": [
+                    {
+                      "value": "SAVED",
+                      "weight": 1
+                    }
+                  ]
+                }
+              ],
+              "onFalse": [
+                {
+                  "code": "COND.EXPR",
+                  "condition": "between(#sequence_no,51,70)",
+                  "onTrue": [
+                    {
+                      "code": "RES.INPUTAREA",
+                      "inputs": [
+                        {
+                          "value": "SUBMITTED",
+                          "weight": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "onFalse": [
+                    {
+                      "code": "RES.INPUTAREA",
+                      "inputs": [
+                        {
+                          "value": "APPROVED",
+                          "weight": 1
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "sequence_no",
+          "javaType": "java.lang.Long",
+          "dbType": "bigint",
+          "length": 19,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "REG.INCREMENT_NUM",
+              "minSize": 1,
+              "step": 1
+            }
+          ]
+        },
+        {
+          "name": "document_no",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 64,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "RES.INPUTAREA",
+              "inputs": [
+                {
+                  "value": "DOC-",
+                  "weight": 1
+                }
+              ]
+            },
+            {
+              "code": "REF.SELF_COLUMN",
+              "refSelfColumn": "sequence_no"
+            }
+          ]
+        },
+        {
+          "name": "batch_tag",
+          "javaType": "java.lang.String",
+          "dbType": "varchar",
+          "length": 64,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "RES.INPUTAREA",
+              "inputs": [
+                {
+                  "value": "DOC-DEMO-CHANGE-ME",
+                  "weight": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "total_amount",
+          "javaType": "java.math.BigDecimal",
+          "dbType": "decimal",
+          "length": 12,
+          "nullable": 0,
+          "regs": [
+            {
+              "code": "RES.INPUTAREA",
+              "inputs": [
+                {
+                  "value": "25.00",
+                  "weight": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

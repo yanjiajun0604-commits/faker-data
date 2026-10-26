@@ -29,7 +29,9 @@ public class RefOtherTableMetaType extends AbstractRefMetaType {
         String[] arr = reg.getRefOtherTableColumn();
         // 统一小写构造 Redis key，与写入侧保持一致（AbstractJdbcService.genColumnValue）
         String key = arr[0].toLowerCase(java.util.Locale.ROOT) + ":" + arr[1].toLowerCase(java.util.Locale.ROOT);
-        String refRowId = extendArg.get("refRowId").toString();
+        Object selected = extendArg.get("refRowId");
+        if(selected==null)return null;
+        String refRowId = selected.toString();
         return referenceCache.get(transId, key, refRowId);
     }
 }

@@ -1,0 +1,14 @@
+{
+  "dataSource": {"type":"MYSQL","url":"jdbc:mysql://127.0.0.1:3306/faker_demo?serverTimezone=UTC","username":"faker_demo","password":""},
+  "tables": [
+    {"name":"demo_extension_document","size":2,"columns":[
+      {"name":"id","javaType":"java.lang.String","nullable":0,"regs":[{"code":"FIX.UUID"}]},
+      {"name":"state","javaType":"java.lang.String","nullable":0,"regs":[{"code":"RES.INPUTAREA","inputs":[{"value":"saved","weight":1}]}]}
+    ]},
+    {"name":"demo_extension_payload","size":2,"parentRows":{"table":"demo_extension_document","rowsPerParent":1},"columns":[
+      {"name":"id","javaType":"java.lang.String","nullable":0,"regs":[{"code":"FIX.UUID"}]},
+      {"name":"document_id","javaType":"java.lang.String","nullable":0,"regs":[{"code":"REF.OTHER_TABLE","refOtherTableColumn":["demo_extension_document","id"]}]},
+      {"name":"payload","javaType":"byte[]","nullable":0,"regs":[{"code":"EXT.FIELD","extension":"demo-field-codec","extensionParameters":{"formatVersion":1}}]}
+    ]}
+  ]
+}

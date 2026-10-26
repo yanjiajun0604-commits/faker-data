@@ -48,6 +48,35 @@ test('the default browser connection flow calls API endpoints at the origin root
   assert.deepEqual(state.requests, ['/db/connect/test', '/db/showTables?withSub=0']);
 });
 
+test('read-only candidate tables do not require generation counts or field rules', () => {
+  const state = screen([]);
+  state.component.selectedTables = [{ name: 'candidates', size: 0, existingData: { maxRows: 1 }, columns: [{ name: 'id', nullable: 0, regs: [] }] }];
+  assert.equal(state.component.validateGenSubmit().length, 0);
+});
+
+test('parent-expanded tables use derived counts and retain exact reference matching', async () => {
+  const state = screen([]);
+  state.component.selectedTables = [{ name: 'children', size: 0, parentRows: { table: 'parents', rowsPerParent: 2 }, columns: [] }];
+  assert.equal(state.component.validateGenSubmit().length, 0);
+});
+
+test('saved null rules remain explicit and editable after JSON omits a null code', () => {
+  const state = screen([]);
+  assert.equal(state.component.ruleLabel(undefined), 'Null');
+  state.component.editReg({ name: 'optional_value', regs: [{}] }, 0, 'fixture');
+  assert.equal(state.component.currItem.code, null);
+});
+
+test('using a saved ordinary scheme preserves field extensions and parent-row configuration', async () => {
+  const scheme = { dataSourceJson: JSON.stringify({ type: 'MYSQL', url: 'fixture', username: 'fixture', password: 'fixture' }), tablesJson: JSON.stringify([{ name: 'children', size: 2, parentRows: { table: 'parents', rowsPerParent: 2 }, columns: [{ name: 'payload', regs: [{ code: 'EXT.FIELD', extension: 'codec', extensionParameters: { kind: 'payload' } }] }] }]) };
+  const state = screen([{ code: 0 }, { code: 0, data: [{ name: 'children', columns: [{ name: 'payload', javaType: 'byte[]', nullable: 0 }] }] }]);
+  await state.component.onSchemePick(scheme);
+  assert.deepEqual(state.requests, ['/db/connect/test', '/db/showTables?withSub=1']);
+  assert.equal(state.component.step, 2);
+  assert.equal(state.component.selectedTables[0].parentRows.rowsPerParent, 2);
+  assert.equal(state.component.selectedTables[0].columns[0].regs[0].extension, 'codec');
+});
+
 test('one failed test-connection click produces exactly one actionable notification', async () => {
   const state = screen([{ code: 1, msg: 'Access denied for fixture-user' }]);
   await state.run('testForm');

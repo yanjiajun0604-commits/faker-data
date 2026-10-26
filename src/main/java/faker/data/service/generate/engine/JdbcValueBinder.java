@@ -17,6 +17,12 @@ public final class JdbcValueBinder {
         String type = javaType.substring(javaType.lastIndexOf('.') + 1);
         final boolean required = Integer.valueOf(0).equals(column.getNullable());
         switch (type) {
+            case "[B": case "byte[]": case "Blob":
+                return new JdbcValueBinder((ps,v) -> {
+                    if(v==null)ps.setNull(position,Types.BLOB);
+                    else if(v instanceof byte[])ps.setBytes(position,(byte[])v);
+                    else throw new IllegalArgumentException("Binary columns require byte[] values");
+                });
             case "Long": return new JdbcValueBinder((ps,v) -> {
                 Long n=Convert.toLong(v); if(n==null)ps.setNull(position,Types.BIGINT);else ps.setLong(position,n);
             });

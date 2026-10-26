@@ -19,3 +19,7 @@ frontend/public/AI_USAGE.en.md
 frontend/public/examples/
 frontend/public/docs/
 src/main/resources/application-local.yml
+__pycache__/
+.venv/
+.mcp-venv/
+integrations/mcp/connections.local.json

@@ -42,6 +42,12 @@ jobs:
         run: |
           chmod +x mvnw
           ./mvnw -B -Dfaker.redis.test.port=6379 verify
+      - name: Verify the MCP adapter boundaries
+        run: |
+          python3 -m venv .mcp-venv
+          .mcp-venv/bin/python -m pip install -r integrations/mcp/requirements.txt
+          .mcp-venv/bin/python -m unittest discover -s integrations/mcp -p test_server.py -v
+          .mcp-venv/bin/python -m unittest discover -s examples/local-extension -p test_generate.py -v
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: faker-data-jar
