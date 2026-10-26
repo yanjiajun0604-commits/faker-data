@@ -18,14 +18,19 @@ public final class JdbcBatchWriter {
     public static final int BATCH_SIZE = 1000;
     private final String sql;
     private final JdbcValueBinder[] binders;
+    private final int[] sourcePositions;
 
     public JdbcBatchWriter(String table, List<ColumnInfo> columns) {
-        binders = new JdbcValueBinder[columns.size()];
+        int count=(int)columns.stream().filter(c->!c.isVirtual()).count();
+        if(count==0)throw new IllegalArgumentException("PHYSICAL_COLUMN_REQUIRED: "+table);
+        binders = new JdbcValueBinder[count];sourcePositions=new int[count];
         StringBuilder names = new StringBuilder(), parameters = new StringBuilder();
+        int persisted=0;
         for (int i=0;i<columns.size();i++) {
-            if(i>0){names.append(',');parameters.append(',');}
+            if(columns.get(i).isVirtual()){JdbcValueBinder.compile(columns.get(i),1);continue;}
+            if(persisted>0){names.append(',');parameters.append(',');}
             names.append(columns.get(i).getName());parameters.append('?');
-            binders[i]=JdbcValueBinder.compile(columns.get(i),i+1);
+            sourcePositions[persisted]=i;binders[persisted]=JdbcValueBinder.compile(columns.get(i),persisted+1);persisted++;
         }
         sql="insert into "+table+" ("+names+") values ("+parameters+")";
     }
@@ -45,7 +50,7 @@ public final class JdbcBatchWriter {
                     for(int row=offset;row<end;row++) {
                         Object[] values=source.apply(row);
                         if(observer!=null)observer.row(values);
-                        for(int col=0;col<binders.length;col++)binders[col].bind(ps,values[col]);
+                        for(int col=0;col<binders.length;col++)binders[col].bind(ps,values[sourcePositions[col]]);
                         if(batches)ps.addBatch();else {if(observer!=null)observer.beforeWrite(connection);if(ps.executeUpdate()!=1)throw new SQLException("BATCH_INSERT_COUNT_UNEXPECTED");if(observer!=null)observer.written(connection);}
                     }
                     if(batches){

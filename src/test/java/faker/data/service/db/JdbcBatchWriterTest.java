@@ -42,8 +42,9 @@ class JdbcBatchWriterTest {
         try {
             ColumnInfo id=new ColumnInfo();id.setName("id");id.setJavaType("java.lang.Long");
             ColumnInfo label=new ColumnInfo();label.setName("label");label.setJavaType("java.lang.String");
-            new JdbcBatchWriter("samples",Arrays.asList(id,label)).write(new JdbcTemplate(fallback),1003,
-                    index->new Object[]{String.valueOf(index+1),"row-"+(index+1)},count->{});
+            ColumnInfo marker=new ColumnInfo();marker.setName("logical_marker");marker.setJavaType("java.lang.String");marker.setVirtual(true);
+            new JdbcBatchWriter("samples",Arrays.asList(marker,id,label)).write(new JdbcTemplate(fallback),1003,
+                    index->new Object[]{"not-inserted",String.valueOf(index+1),"row-"+(index+1)},count->{});
             assertEquals(1003,jdbc.queryForObject("SELECT COUNT(*) FROM samples",Integer.class));
             assertEquals("row-1003",jdbc.queryForObject("SELECT label FROM samples WHERE id=1003",String.class));
         } finally { jdbc.execute("SHUTDOWN"); }

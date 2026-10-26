@@ -102,4 +102,15 @@ class FieldRuleExtensionTest {
             }finally{cache.removeTask(id);jdbc.execute("SHUTDOWN");}
         }
     }
+    @Test void virtualOrdinaryMarkersRemainAvailableToBinaryExtensionsWithoutBeingInserted()throws Exception {
+        install("virtual-inline","virtual-inline");GenerateVO request=request("virtual-inline");
+        faker.data.domain.ColumnInfo marker=new faker.data.domain.ColumnInfo();marker.setName("logical_parent");marker.setJavaType("java.lang.String");marker.setVirtual(true);
+        marker.setRegs(Arrays.asList(mapper.readValue("{\"code\":\"REF.OTHER_TABLE\",\"refOtherTableColumn\":[\"parents\",\"id\"]}",faker.data.service.generate.MetaTypeVO.class)));
+        request.getTables().get(1).getColumns().add(0,marker);
+        request.getTables().get(1).getColumns().stream().filter(c->c.getName().equals("parent_id")).findFirst().get().setRegs(Arrays.asList(mapper.readValue("{\"code\":\"REF.SELF_COLUMN\",\"refSelfColumn\":\"logical_parent\"}",faker.data.service.generate.MetaTypeVO.class)));
+        DriverManagerDataSource target=new DriverManagerDataSource("jdbc:h2:mem:field_virtual;DATABASE_TO_UPPER=false;DB_CLOSE_DELAY=-1","sa","test");JdbcTemplate jdbc=new JdbcTemplate(target);jdbc.execute("CREATE TABLE parents(id VARCHAR(36) PRIMARY KEY)");jdbc.execute("CREATE TABLE children(id VARCHAR(36) PRIMARY KEY,parent_id VARCHAR(36),payload BLOB)");
+        AsyncTaskExecutor executor=mock(AsyncTaskExecutor.class);String id=UUID.randomUUID().toString();when(executor.getTaskId()).thenReturn(id);
+        try{engine.generate(target,request.getTables(),mock(AsyncTaskMonitor.class),executor);assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM children",Integer.class));for(Map<String,Object> row:jdbc.queryForList("SELECT parent_id,payload FROM children"))assertArrayEquals(row.get("parent_id").toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),(byte[])row.get("payload"));}
+        finally{cache.removeTask(id);jdbc.execute("SHUTDOWN");}
+    }
 }

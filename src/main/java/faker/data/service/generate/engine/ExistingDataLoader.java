@@ -25,6 +25,7 @@ final class ExistingDataLoader {
         identifier(table.getName(),true);
         List<String> names=new ArrayList<>();
         for(ColumnInfo column:table.getColumns()) {
+            if(column.isVirtual())throw new IllegalArgumentException("VIRTUAL_EXISTING_SOURCE_UNSUPPORTED: "+table.getName());
             identifier(column.getName(),false);
             if(column.getRegs()!=null && !column.getRegs().isEmpty())throw new IllegalArgumentException("existingData columns cannot contain generation rules");
             names.add(column.getName());

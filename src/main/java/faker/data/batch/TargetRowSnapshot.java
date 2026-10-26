@@ -67,7 +67,7 @@ public final class TargetRowSnapshot {
         out.keyPositions=new int[keys.size()];
         for(int i=0;i<out.primaryKeys.size();i++) {
             String key=out.primaryKeys.get(i);int position=-1;
-            for(int c=0;c<configured.getColumns().size();c++)if(configured.getColumns().get(c).getName().equalsIgnoreCase(key)){position=c;break;}
+            for(int c=0;c<configured.getColumns().size();c++)if(!configured.getColumns().get(c).isVirtual() && configured.getColumns().get(c).getName().equalsIgnoreCase(key)){position=c;break;}
             out.keyPositions[i]=position;
             if(position<0)out.unsupportedReason="PRIMARY_KEY_NOT_SUPPLIED";
             Column col=out.column(key);

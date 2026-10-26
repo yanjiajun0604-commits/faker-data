@@ -41,11 +41,13 @@ public final class GenerationPreflight {
         for(Map<String,Object> col:cols)actual.put(lower(col.get("name")),col);
         Map<String,ColumnInfo> supplied=new LinkedHashMap<>();
         for(ColumnInfo col:table.getColumns()) {
+            if(col.isVirtual()){if(actual.containsKey(lower(col.getName())))issue(errors,"VIRTUAL_SHADOWS_DATABASE_COLUMN",table.getName(),col.getName(),"A virtual field must use a distinct logical name, not hide a real target column");continue;}
             supplied.put(lower(col.getName()),col);
             if(!actual.containsKey(lower(col.getName())))issue(errors,"COLUMN_NOT_FOUND",table.getName(),col.getName(),"Configured column does not exist in the target table");
         }
         boolean existing=table.getExistingData()!=null;
-        summary.add(map("table",table.getName(),"mode",existing?"READ_EXISTING":"GENERATE","databaseColumns",cols.size(),"primaryKeys",metadata.get("primaryKeys"),"indexes",metadata.get("indexes")));
+        List<String> virtual=new ArrayList<>();for(ColumnInfo col:table.getColumns())if(col.isVirtual())virtual.add(col.getName());
+        summary.add(map("table",table.getName(),"mode",existing?"READ_EXISTING":"GENERATE","databaseColumns",cols.size(),"virtualColumns",virtual,"primaryKeys",metadata.get("primaryKeys"),"indexes",metadata.get("indexes")));
         if(existing)return;
         boolean writes=table.getSize()==null || table.getSize()>0 || table.getParentRows()!=null || table.getTreeConfig()!=null;
         if(!writes)return;

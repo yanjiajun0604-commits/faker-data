@@ -23,6 +23,10 @@ public final class GenerationValidator {
                 if(!columns.add(column.getName().toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("Duplicate column: "+column.getName());
                 if(column.getJavaType()==null || column.getJavaType().trim().isEmpty())throw new IllegalArgumentException("Column requires javaType: "+column.getName());
             }
+            long virtual=table.getColumns().stream().filter(ColumnInfo::isVirtual).count();
+            if(virtual>50)throw new IllegalArgumentException("VIRTUAL_FIELD_LIMIT: "+table.getName());
+            if(virtual>0 && table.getExistingData()!=null)throw new IllegalArgumentException("VIRTUAL_EXISTING_SOURCE_UNSUPPORTED: "+table.getName());
+            if(virtual==table.getColumns().size())throw new IllegalArgumentException("PHYSICAL_COLUMN_REQUIRED: "+table.getName());
         }
         OwnershipConfiguration.validate(tables);
     }
@@ -46,7 +50,7 @@ public final class GenerationValidator {
             Map<String,Object> item=new LinkedHashMap<>();item.put("table",table.getName());
             item.put("mode",table.getExistingData()!=null?"READ_EXISTING":"GENERATE");
             item.put("requestedRows",table.getParentRows()!=null || table.getExistingData()!=null || table.getTreeConfig()!=null?null:table.getSize());
-            item.put("columns",table.getColumns().size());item.put("fieldExtensions",plan.hasFieldExtensions);summary.add(item);
+            item.put("columns",table.getColumns().size());item.put("virtualColumns",table.getColumns().stream().filter(ColumnInfo::isVirtual).count());item.put("fieldExtensions",plan.hasFieldExtensions);summary.add(item);
             fields+=table.getColumns().size();extensions|=plan.hasFieldExtensions;
         }
         Map<String,Object> result=new LinkedHashMap<>();result.put("valid",true);result.put("scope","CONFIGURATION_ONLY");

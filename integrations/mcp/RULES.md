@@ -8,6 +8,8 @@ Workflow: read this resource -> inspect business schema -> validate_generation(t
 
 Each table: name, size (non-negative), columns. Each column: name, javaType, nullable (0 required/1 nullable), regs (ordered rule list). Multiple rules concatenate text. An empty list generates null. Common Java types: java.lang.String, java.lang.Long, java.lang.Integer, java.math.BigDecimal, java.sql.Timestamp (milliseconds), byte[] (extension).
 
+Optional column virtual:true (default false) generates an ordinary task-local marker, used by same-row references, conditions, parentRows and refMatch, but excluded from INSERT. Up to 50/table and at least one physical column required. It cannot shadow a real target column or be used on existingData. Preflight summaries list virtualColumns. Use it to retain real generation-time parent/role associations missing from physical content tables, not to invent relationships in old rows. Virtual values remain in trusted extension context but are not physical PKs/cleanup joins. See docs/virtual-fields.en.md and examples/virtual-fields/create_recipe.py.
+
 - UUID: {"code":"FIX.UUID"}
 - Constant: {"code":"RES.INPUTAREA","inputs":[{"value":"SAVED","weight":1}]}
 - Sequence: {"code":"REG.INCREMENT_NUM","minSize":1,"step":1}
