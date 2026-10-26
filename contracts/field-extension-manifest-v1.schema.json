@@ -1,0 +1,42 @@
+{
+  "type": "object",
+  "properties": {
+    "protocol": {
+      "const": "faker-field-extension/1"
+    },
+    "command": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 8192
+      },
+      "maxItems": 100
+    },
+    "allowedFields": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "maxItems": 500
+      }
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600
+    }
+  },
+  "required": [
+    "command",
+    "allowedFields"
+  ],
+  "additionalProperties": false,
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:faker-data:field-extension-manifest:1",
+  "description": "Trusted local manifest, never included in portable scheme exports. command[0] must be an absolute local executable; supported placeholders are ${input}, ${output}, ${extension}. Omitted timeout is 60 seconds."
+}

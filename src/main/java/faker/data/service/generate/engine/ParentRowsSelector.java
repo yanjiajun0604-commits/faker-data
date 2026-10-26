@@ -19,6 +19,9 @@ final class ParentRowsSelector {
         this(parent,config,false);
     }
     ParentRowsSelector(TableVO parent,ParentRowsConfig config,boolean preview) {
+        this(parent,config,preview,false);
+    }
+    ParentRowsSelector(TableVO parent,ParentRowsConfig config,boolean preview,boolean portable) {
         this.preview=preview;
         this.parent=parent; key=parent.getName().toLowerCase(Locale.ROOT);
         if(config.getCondition()==null || config.getCondition().trim().isEmpty()) {
@@ -27,7 +30,7 @@ final class ParentRowsSelector {
             rule=new MetaTypeVO();rule.setCode("COND.EXPR");rule.setCondition(config.getCondition());
             evaluator=(CondExprMetaType)MetaTypeFactory.getMetaTypeImpl(rule);
             if(evaluator==null)throw new IllegalArgumentException("Conditional rule implementation is unavailable");
-            expression=preview?PreviewSafety.expression(config.getCondition()):evaluator.prepare(rule);
+            expression=portable?new org.springframework.expression.spel.standard.SpelExpressionParser().parseExpression(config.getCondition()):preview?PreviewSafety.expression(config.getCondition()):evaluator.prepare(rule);
         }
     }
 

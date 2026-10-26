@@ -1,0 +1,629 @@
+{
+  "type": "object",
+  "properties": {
+    "format": {
+      "const": "faker-data.scheme"
+    },
+    "formatVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "connectionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+    },
+    "tables": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/table"
+      },
+      "maxItems": 100
+    },
+    "requiredLocalValues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pointer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "pointer",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 10000
+    },
+    "requiredExtensions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      },
+      "maxItems": 100
+    },
+    "trustedCodeRequired": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "format",
+    "formatVersion",
+    "name",
+    "connectionRef",
+    "tables",
+    "requiredLocalValues",
+    "requiredExtensions",
+    "trustedCodeRequired"
+  ],
+  "additionalProperties": false,
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:faker-data:scheme:1",
+  "title": "faker-data portable redacted scheme v1",
+  "definitions": {
+    "binding": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "value": {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "rule": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 0,
+          "maxLength": 128
+        },
+        "minSize": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "maxSize": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "step": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "styleReg": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 0,
+          "maxLength": 4096
+        },
+        "refOtherTableColumn": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "maxItems": 2
+        },
+        "refSelfColumn": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 0,
+          "maxLength": 128
+        },
+        "refSelfTransform": {
+          "enum": [
+            "FIRST_CHAR",
+            null
+          ]
+        },
+        "refMatch": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/binding"
+          }
+        },
+        "refOnMissing": {
+          "enum": [
+            "ERROR",
+            "NULL",
+            null
+          ]
+        },
+        "refOnMultiple": {
+          "enum": [
+            "ERROR",
+            "FIRST",
+            null
+          ]
+        },
+        "dateRange": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775806
+          },
+          "maxItems": 2
+        },
+        "inputs": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 0,
+                "maxLength": 65536
+              },
+              "weight": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          "maxItems": 10000
+        },
+        "extension": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 0,
+          "maxLength": 80
+        },
+        "extensionParameters": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "condition": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 0,
+          "maxLength": 4096
+        },
+        "onTrue": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/rule"
+          },
+          "maxItems": 1024
+        },
+        "onFalse": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/rule"
+          },
+          "maxItems": 1024
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "column": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "javaType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "dbType": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 0,
+          "maxLength": 128
+        },
+        "length": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "nullable": {
+          "enum": [
+            0,
+            1,
+            null
+          ]
+        },
+        "virtual": {
+          "type": "boolean"
+        },
+        "regs": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/rule"
+          },
+          "maxItems": 1024
+        }
+      },
+      "required": [
+        "name",
+        "javaType"
+      ],
+      "additionalProperties": false
+    },
+    "derived": {
+      "type": "object",
+      "properties": {
+        "table": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "join": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "where": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "freshness": {
+          "enum": [
+            "AUTO",
+            "FULL_KEYS",
+            "NUMERIC_HIGH_WATERMARK",
+            null
+          ]
+        },
+        "baselineLimit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "maxRows": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "derivedRows": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/derived"
+          },
+          "maxItems": 20
+        }
+      },
+      "required": [
+        "table",
+        "join"
+      ],
+      "additionalProperties": false
+    },
+    "table": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/column"
+          },
+          "maxItems": 550
+        },
+        "existingData": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "where": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "orderBy": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "maxItems": 50
+            },
+            "maxRows": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 100000
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "parentRows": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "table": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "condition": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 0,
+              "maxLength": 4096
+            },
+            "rowsPerParent": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 10000
+            }
+          },
+          "required": [
+            "table"
+          ],
+          "additionalProperties": false
+        },
+        "ownership": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "mutableColumns": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "maxItems": 50
+            },
+            "derivedRows": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "$ref": "#/definitions/derived"
+              },
+              "maxItems": 20
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "treeConfig": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "nodeField": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "parentRefField": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "maxDepth": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "minRoots": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            "maxRoots": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            "minChildrenPerNode": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            "maxChildrenPerNode": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            "treeCodeEnabled": {
+              "type": "boolean"
+            },
+            "treeCodeField": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 0,
+              "maxLength": 128
+            },
+            "layerBitWidths": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 128
+              },
+              "maxItems": 10000
+            },
+            "reservedRootCodes": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "maxItems": 100000
+            }
+          },
+          "required": [
+            "nodeField",
+            "maxDepth"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "name",
+        "columns"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

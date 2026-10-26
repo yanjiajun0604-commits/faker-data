@@ -30,13 +30,14 @@ public final class JdbcBatchWriter {
         StringBuilder names = new StringBuilder(), parameters = new StringBuilder();
         int persisted=0;
         for (int i=0;i<columns.size();i++) {
-            if(columns.get(i).isVirtual()){JdbcValueBinder.compile(columns.get(i),1);continue;}
+            if(columns.get(i).isVirtual()){compile(columns.get(i),1);continue;}
             if(persisted>0){names.append(',');parameters.append(',');}
             names.append(columns.get(i).getName());parameters.append('?');
-            sourcePositions[persisted]=i;fieldNames[persisted]=columns.get(i).getName();binders[persisted]=JdbcValueBinder.compile(columns.get(i),persisted+1);persisted++;
+            sourcePositions[persisted]=i;fieldNames[persisted]=columns.get(i).getName();binders[persisted]=compile(columns.get(i),persisted+1);persisted++;
         }
         sql="insert into "+table+" ("+names+") values ("+parameters+")";
     }
+    private JdbcValueBinder compile(ColumnInfo column,int position){try{return JdbcValueBinder.compile(column,position);}catch(RuntimeException error){throw GenerationProblem.at(error,tableName,column.getName(),"javaType",null,null,"UNSUPPORTED_JDBC_TYPE");}}
 
     public void write(JdbcTemplate jdbc, int rows, IntFunction<Object[]> source, IntConsumer progress) {
         write(jdbc,rows,source,progress,null);

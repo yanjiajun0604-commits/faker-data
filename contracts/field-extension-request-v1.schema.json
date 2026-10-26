@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "properties": {
+    "protocol": {
+      "const": "faker-field-extension/1"
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "rowIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "column": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "parameters": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "table",
+          "rowIndex",
+          "column"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 100000
+    },
+    "tables": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        },
+        "maxItems": 100000
+      }
+    }
+  },
+  "required": [
+    "protocol",
+    "taskId",
+    "fields",
+    "tables"
+  ],
+  "additionalProperties": false,
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:faker-data:field-extension-request:1"
+}

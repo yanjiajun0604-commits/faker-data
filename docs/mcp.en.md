@@ -50,6 +50,8 @@ Ask the AI to inspect the selected database with built-in `list_tables`, `descri
 | `preview_generation(tables,rows_per_table,connection)` | Restricted ordinary-rule sample with no target writes or extension execution; inspect sampleValid/notChecked |
 | `save_scheme(name,tables,connection)` | Validate and save an ordinary editable UI scheme; the same name replaces configuration |
 | `get_scheme(scheme_id)` | Read field rules, or list IDs/names when omitted; connection credentials are excluded |
+| `export_scheme(scheme_id,connection_ref)` | Redacted versioned sharing document; preserves null placeholders and reports local bindings |
+| `import_scheme(document,connection,name,values_profile,replace_existing,confirm_trusted_code)` | Save a reviewed document using private local values; no target connection/generation or code execution |
 | `generate_data(scheme_id,connection,confirm_write,request_id)` | Submit one GEN_DATA task when `confirm_write=true` is covered by user authorization |
 | `get_batch(batch_id,include_rows,offset,limit)` | Read commit/rollback/unknown journal and observed keys/fingerprints; no cleanup |
 | `verify_batch(batch_id,checks,connection)` | Read committed original snapshots and declared count/value/reference checks; no repair/state change |
@@ -61,6 +63,8 @@ Ask the AI to inspect the selected database with built-in `list_tables`, `descri
 | `get_task(task_id)` | Read state, progress and sanitized errors |
 
 See [field diagnostics, no-write preview and verification](preview-verification.en.md) for exact limits and failure semantics. Preview is a sample; FINISHED and snapshot checks do not prove business acceptance.
+
+For sharing, use the [portable format and private bindings](portable-schemes.en.md), not the raw local database/legacy scheme response. `faker://contracts` exposes v1 machine schemas/rule metadata. Optional FAKER_SCHEME_VALUES_FILE supplies local replacement profiles without passing values to the AI; same-name imports fail unless explicitly overwritten.
 
 `connection` selects a private local profile (default: `default`). Execution uses the explicitly selected profile, not stale saved credentials. Configuration validation does not prove database constraints, candidate availability, installed extensions or business workflow validity. `FINISHED` means generation completed, not business acceptance.
 

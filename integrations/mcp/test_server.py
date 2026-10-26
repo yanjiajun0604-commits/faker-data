@@ -93,6 +93,39 @@ class AdapterTest(unittest.TestCase):
                 server.verify_batch("valid-batch", checks=[{}] * 21)
             request.assert_not_called()
 
+    def test_portable_export_preserves_null_keys_and_json_pointers(self):
+        document = {"format": "faker-data.scheme", "formatVersion": 1, "tables": [{"existingData": {"where": {"password": None}}}],
+                    "requiredLocalValues": [{"pointer": "/tables/0/existingData/where/password", "reason": "LOCAL_SOURCE_SELECTOR"}]}
+        with patch.object(server.api, "request", return_value=document):
+            self.assertEqual(document, server.export_scheme(1))
+
+    def test_private_values_are_not_tool_arguments_or_outputs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "private.json"
+            path.write_text(json.dumps({"demo": {"/tables/0/columns/0/regs/0/inputs/0/value": "binding-secret"}}), encoding="utf-8")
+            client = server.JavaAPI("http://127.0.0.1:8085", None, str(path))
+            self.assertEqual({"/tables/0/columns/0/regs/0/inputs/0/value": "binding-secret"}, client.private_values("demo"))
+            self.assertEqual("[REDACTED]", client.scrub("binding-secret"))
+            with patch.object(server, "api", client), patch.object(client, "connection", return_value={}), patch.object(client, "request", return_value={"schemeId": 3}) as request:
+                self.assertEqual({"schemeId": 3}, server.import_scheme({"format": "faker-data.scheme"}, values_profile="demo"))
+                self.assertIn("binding-secret", str(request.call_args.args[1]["replacements"]))
+            tools = {t.name: t for t in asyncio.run(server.mcp.list_tools())}
+            self.assertNotIn("replacements", tools["import_scheme"].inputSchema["properties"])
+            self.assertNotIn("password", tools["import_scheme"].inputSchema["properties"])
+
+    def test_private_rule_values_do_not_hide_public_rule_codes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "private.json"
+            path.write_text(json.dumps({"demo": {"/tables/0/columns/0/regs": [{"code": "RES.INPUTAREA", "inputs": [{"value": "binding-secret"}]}]}}), encoding="utf-8")
+            client = server.JavaAPI("http://127.0.0.1:8085", None, str(path))
+            self.assertEqual({"code": "RES.INPUTAREA", "value": "[REDACTED]"}, client.scrub({"code": "RES.INPUTAREA", "value": "binding-secret"}))
+
+    def test_longer_private_values_are_redacted_before_their_prefixes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "private.json"
+            path.write_text(json.dumps({"demo": {"/a": "binding", "/b": "binding-secret"}}), encoding="utf-8")
+            self.assertEqual("[REDACTED]", server.JavaAPI("http://127.0.0.1:8085", None, str(path)).scrub("binding-secret"))
+
     def test_scheme_output_excludes_connection_secrets(self):
         row = {"id": 1, "name": "orders", "dataSourceJson": "secret", "tablesJson": "[]"}
         with patch.object(server.api, "request", return_value=row):

@@ -1,0 +1,10 @@
+{
+  "demo": {
+    "/tables/0/columns/1/regs": [
+      {
+        "code": "RES.INPUTAREA",
+        "inputs": [{"value": "REPLACE_LOCALLY", "weight": 1}]
+      }
+    ]
+  }
+}

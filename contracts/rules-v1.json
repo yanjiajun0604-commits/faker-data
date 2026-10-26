@@ -1,0 +1,110 @@
+{
+  "format": "faker-data.rules",
+  "formatVersion": 1,
+  "ruleShape": "scheme-v1.schema.json#/definitions/rule",
+  "rules": [
+    {
+      "code": "FIX.UUID",
+      "kind": "FIX",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "FIX.PEOPLE_NAME",
+      "kind": "FIX",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "FIX.TEL",
+      "kind": "FIX",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "FIX.IDENTIF",
+      "kind": "FIX",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "REG.INCREMENT_NUM",
+      "kind": "REG",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "REG.RANGE_NUM",
+      "kind": "REG",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "REG.RANGE_STRING",
+      "kind": "REG",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "REG.DATE",
+      "kind": "REG",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "REG.STYLE",
+      "kind": "REG",
+      "preview": "UNSUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "REG.TREE_CODE",
+      "kind": "REG",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "REF.OTHER_TABLE",
+      "kind": "REF",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "REF.SELF_COLUMN",
+      "kind": "REF",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "RES.INPUTAREA",
+      "kind": "RES",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "COND.EXPR",
+      "kind": "COND",
+      "preview": "RESTRICTED",
+      "localCode": false
+    },
+    {
+      "code": "STRUCT.TREE_CODE",
+      "kind": "STRUCT",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "STRUCT.TREE_PARENT",
+      "kind": "STRUCT",
+      "preview": "SUPPORTED",
+      "localCode": false
+    },
+    {
+      "code": "EXT.FIELD",
+      "kind": "EXT",
+      "preview": "OMITTED",
+      "localCode": true
+    }
+  ],
+  "semantics": "Use ordinary rules for supported fields; EXT.FIELD fills only unsupported values. See the bilingual rule/preview guides for semantic and runtime limits."
+}

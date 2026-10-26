@@ -19,6 +19,7 @@ final class TableGenerationPlan {
     boolean hasFieldExtensions;
     private final boolean auditRules;
     private final boolean preview;
+    private final boolean portable;
 
     TableGenerationPlan(TableVO table) {
         this(table,false);
@@ -27,6 +28,10 @@ final class TableGenerationPlan {
         this(table,auditRules,false);
     }
     TableGenerationPlan(TableVO table,boolean auditRules,boolean preview) {
+        this(table,auditRules,preview,false);
+    }
+    TableGenerationPlan(TableVO table,boolean auditRules,boolean preview,boolean portable) {
+        this.portable=portable;
         this.preview=preview;
         this.auditRules=auditRules;
         this.table=table;
@@ -98,7 +103,7 @@ final class TableGenerationPlan {
             referenceTable=ref==null || ref.length==0?null:ref[0].toLowerCase(Locale.ROOT);
             lookup=source.getRefMatch()==null?null:new ReferenceLookup(source);
             condition=strategy instanceof CondExprMetaType?(CondExprMetaType)strategy:null;
-            expression=condition==null?null:preview?PreviewSafety.expression(source.getCondition()):condition.prepare(source);
+            expression=condition==null?null:portable?new org.springframework.expression.spel.standard.SpelExpressionParser().parseExpression(source.getCondition()):preview?PreviewSafety.expression(source.getCondition()):condition.prepare(source);
             yes=condition==null?null:prepareRules(source.getOnTrue(),columnName,path+".onTrue");
             no=condition==null?null:prepareRules(source.getOnFalse(),columnName,path+".onFalse");
         }

@@ -14,6 +14,10 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
+PUBLIC_RULE_CODES = {"FIX.UUID", "FIX.PEOPLE_NAME", "FIX.TEL", "FIX.IDENTIF", "REG.INCREMENT_NUM", "REG.RANGE_NUM",
+                     "REG.RANGE_STRING", "REG.DATE", "REG.STYLE", "REG.TREE_CODE", "REF.OTHER_TABLE", "REF.SELF_COLUMN",
+                     "RES.INPUTAREA", "COND.EXPR", "STRUCT.TREE_CODE", "STRUCT.TREE_PARENT", "EXT.FIELD"}
+
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -21,13 +25,14 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class JavaAPI:
-    def __init__(self, base_url: str, connections_file: str | None):
+    def __init__(self, base_url: str, connections_file: str | None, scheme_values_file: str | None = None):
         parsed = urllib.parse.urlsplit(base_url)
         if (parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
                 or parsed.username or parsed.password or parsed.query or parsed.fragment):
             raise ValueError("FAKER_BASE_URL must be a local http URL, e.g. http://127.0.0.1:8085")
         self.base_url = base_url.rstrip("/")
         self.connections_file = Path(connections_file).expanduser() if connections_file else None
+        self.scheme_values_file = Path(scheme_values_file).expanduser() if scheme_values_file else None
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
 
     def profiles(self) -> dict[str, Any]:
@@ -49,12 +54,51 @@ class JavaAPI:
         return {k: profile[k] for k in ("type", "url", "username", "password")}
 
     def scrub(self, value: Any) -> Any:
+        return self._scrub(value, self.known_secrets())
+
+    def known_secrets(self) -> list[str]:
         secrets = []
         if self.connections_file:
             for profile in self.profiles().values():
                 if isinstance(profile, dict):
                     secrets.extend(profile[k] for k in ("password", "url") if isinstance(profile.get(k), str) and profile[k])
-        return self._scrub(value, secrets)
+        def private_strings(item):
+            if isinstance(item, str) and item:
+                secrets.append(item)
+            elif isinstance(item, dict):
+                for key, child in item.items():
+                    if key == "code" and isinstance(child, str) and child in PUBLIC_RULE_CODES:
+                        continue
+                    private_strings(child)
+            elif isinstance(item, list):
+                for child in item:
+                    private_strings(child)
+        if self.scheme_values_file:
+            private_strings(self.value_profiles())
+        return sorted(set(secrets), key=len, reverse=True)
+
+    def value_profiles(self) -> dict[str, Any]:
+        if self.scheme_values_file is None:
+            raise ToolError("Set optional FAKER_SCHEME_VALUES_FILE to a private local JSON file before using a values_profile.")
+        try:
+            if self.scheme_values_file.stat().st_size > 1024 * 1024:
+                raise ValueError()
+            value = json.loads(self.scheme_values_file.read_text(encoding="utf-8-sig"))
+            if not isinstance(value, dict) or any(not isinstance(profile, dict) for profile in value.values()):
+                raise ValueError()
+            return value
+        except (OSError, ValueError):
+            raise ToolError("Cannot read private scheme values; check FAKER_SCHEME_VALUES_FILE and its JSON format.") from None
+
+    def private_values(self, name: str | None) -> dict[str, Any]:
+        if name is None:
+            return {}
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", name):
+            raise ToolError("Invalid values_profile name.")
+        profiles = self.value_profiles()
+        if name not in profiles:
+            raise ToolError("Unknown private values_profile; configure it locally, without sending values to the AI.")
+        return profiles[name]
 
     def _scrub(self, value: Any, secrets: list[str]) -> Any:
         if isinstance(value, dict):
@@ -93,7 +137,7 @@ class JavaAPI:
         return result.get("data")
 
 
-api = JavaAPI(os.environ.get("FAKER_BASE_URL", "http://127.0.0.1:8085"), os.environ.get("FAKER_CONNECTIONS_FILE"))
+api = JavaAPI(os.environ.get("FAKER_BASE_URL", "http://127.0.0.1:8085"), os.environ.get("FAKER_CONNECTIONS_FILE"), os.environ.get("FAKER_SCHEME_VALUES_FILE"))
 mcp = FastMCP("faker-data", log_level="WARNING", instructions=(
     "Generate related test data using the existing faker-data rules engine. Read faker://rules before configuring. "
     "Inspect the selected database using list_tables, describe_table and read_rows; another database MCP is optional. "
@@ -176,6 +220,33 @@ def get_scheme(scheme_id: int | None = None) -> dict[str, Any]:
     row = api.request("/scheme/" + str(scheme_id))
     return api.scrub({"id": row["id"], "name": row["name"], "kind": row.get("kind", "RULES"),
                       "tables": json.loads(row["tablesJson"])})
+
+
+@mcp.tool(annotations=READ, structured_output=True)
+def export_scheme(scheme_id: int, connection_ref: str = "local") -> dict[str, Any]:
+    """Export a normal scheme as a redacted faker-data.scheme v1 document, excluding connections, executables and opaque private parameters. Exact null placeholders/requiredLocalValues must stay intact; author-review business names/literals before sharing, since this is not general PII detection. connection_ref is a public logical alias, not a real JDBC/profile secret. No target access or writes."""
+    if scheme_id < 1 or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", connection_ref):
+        raise ToolError("Invalid scheme ID or public connection_ref.")
+    document = api.request("/scheme/" + str(scheme_id) + "/export?connectionRef=" + connection_ref)
+    if not isinstance(document, dict) or document.get("format") != "faker-data.scheme" or "dataSource" in document:
+        raise ToolError("Server does not provide the expected portable scheme contract.")
+    # The export endpoint already redacts values. Generic key dropping would corrupt pointer placeholders.
+    return document
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False), structured_output=True)
+def import_scheme(document: dict, connection: str = "default", name: str | None = None,
+                  values_profile: str | None = None, replace_existing: bool = False, confirm_trusted_code: bool = False) -> dict[str, Any]:
+    """Import a reviewed v1 document into local scheme storage without target connection/generation or extension installation/execution. Bind the explicit local connection; private replacements come only from optional FAKER_SCHEME_VALUES_FILE selected by values_profile, never tool arguments. Missing bindings/future versions/unknown fields fail. Same name conflicts unless replace_existing=true; after timeout inspect get_scheme before retry. confirm_trusted_code=true requires authorization for trusted extension/advanced-expression configuration; never bypass this review via raw save. Code remains trusted local code, not sandboxed."""
+    if name is not None and (not name.strip() or len(name) > 200):
+        raise ToolError("Scheme name must contain 1-200 characters.")
+    source = api.connection(connection)
+    replacements = api.private_values(values_profile)
+    secrets = api.known_secrets()
+    result = api.request("/scheme/import", {"document": document, "dataSource": source, "name": name,
+                                          "replacements": replacements, "replaceExisting": replace_existing,
+                                          "confirmTrustedCode": confirm_trusted_code})
+    return api._scrub(result, secrets)
 
 
 @mcp.tool(annotations=WRITE, structured_output=True)
@@ -285,6 +356,16 @@ def get_cleanup(batch_id: str, plan_id: str, include_rows: bool = False, offset:
 @mcp.resource("faker://rules")
 def rules() -> str:
     return (Path(__file__).parent / "RULES.md").read_text(encoding="utf-8")
+
+
+@mcp.resource("faker://contracts")
+def contracts() -> str:
+    root = Path(__file__).resolve().parents[2] / "contracts"
+    manifest = json.loads((root / "manifest-v1.json").read_text(encoding="utf-8"))
+    names = manifest["files"]
+    if any(not re.fullmatch(r"[a-z0-9.-]+\.json", name) for name in names):
+        raise ToolError("Invalid bundled contract manifest.")
+    return json.dumps({"manifest": manifest, "documents": {name: json.loads((root / name).read_text(encoding="utf-8")) for name in names}}, ensure_ascii=False)
 
 
 if __name__ == "__main__":

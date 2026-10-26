@@ -29,10 +29,11 @@ class ProtocolTest(unittest.IsolatedAsyncioTestCase):
             async with ClientSession(read, write) as client:
                 await client.initialize()
                 tools = (await client.list_tools()).tools
-                self.assertEqual({t.name for t in tools}, {"list_tables", "describe_table", "read_rows", "validate_generation", "preflight_generation", "preview_generation", "save_scheme", "get_scheme", "generate_data", "get_task", "get_batch", "verify_batch", "get_request", "reconcile_batch", "preview_cleanup", "execute_cleanup", "get_cleanup"})
+                self.assertEqual({t.name for t in tools}, {"list_tables", "describe_table", "read_rows", "validate_generation", "preflight_generation", "preview_generation", "save_scheme", "get_scheme", "export_scheme", "import_scheme", "generate_data", "get_task", "get_batch", "verify_batch", "get_request", "reconcile_batch", "preview_cleanup", "execute_cleanup", "get_cleanup"})
                 self.assertTrue(all(t.outputSchema for t in tools))
                 resources = await client.list_resources()
                 self.assertIn("faker://rules", [str(r.uri) for r in resources.resources])
+                self.assertIn("faker://contracts", [str(r.uri) for r in resources.resources])
                 guide = await client.read_resource("faker://rules")
                 self.assertIn("REF.OTHER_TABLE", guide.contents[0].text)
                 async def call(name, args):

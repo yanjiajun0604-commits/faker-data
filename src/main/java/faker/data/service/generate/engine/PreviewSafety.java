@@ -33,4 +33,11 @@ final class PreviewSafety {
         values.forEach((name,value)->{if(value==null || value instanceof String || value instanceof Number || value instanceof Boolean){context.setVariable(name,value);context.setVariable(name.toLowerCase(Locale.ROOT),value);}});
         new SpelBuiltinFunctionProvider().register(context);return Boolean.TRUE.equals(expression.getValue(context,Boolean.class));
     }
+    static boolean requiresTrustedCode(MetaTypeVO rule){
+        IMetaType implementation=MetaTypeFactory.getMetaTypeImpl(rule);if(implementation==null)return true;String name=implementation.getClass().getName();
+        if("EXT.FIELD".equals(rule.getCode()))return true;
+        if(!name.equals("faker.data.service.generate.reg.StyleRegMetaType") && (!name.startsWith("faker.data.service.generate.") || !CLASSES.contains(name.substring("faker.data.service.generate.".length()))))return true;
+        if("COND.EXPR".equals(rule.getCode()))try{expression(rule.getCondition());}catch(RuntimeException unsupported){return true;}
+        return false;
+    }
 }

@@ -65,6 +65,8 @@ AI 应先用内置只读工具理解表结构、关联及业务条件；不必�
 | `preview_generation(tables, rows_per_table, connection)` | 受限普通规则样本；不写目标库、不执行扩展，检查 sampleValid/notChecked |
 | `save_scheme(name, tables, connection)` | 校验并保存普通方案；同名会更新，人工 UI 可继续使用 |
 | `get_scheme(scheme_id)` | 读取方案规则；省略 ID 则列出名称与 ID，不返回连接凭据 |
+| `export_scheme(scheme_id, connection_ref)` | 脱敏、版本化的分享文档，保留 null 占位并列出本机绑定项 |
+| `import_scheme(document, connection, name, values_profile, replace_existing, confirm_trusted_code)` | 用私人本机值保存审阅后的文档；不连接目标、不生成或执行代码 |
 | `generate_data(scheme_id, connection, confirm_write, request_id)` | `confirm_write=true` 表示处于用户已授权的写入范围，提交一次 GEN_DATA，立即返回任务 ID |
 | `get_batch(batch_id, include_rows, offset, limit)` | 读取目标库提交／回滚／未知状态、实际主键与摘要；不清理 |
 | `verify_batch(batch_id, checks, connection)` | 只读核对原始快照及声明的数量／允许值／引用；不修复或改变状态 |
@@ -76,6 +78,8 @@ AI 应先用内置只读工具理解表结构、关联及业务条件；不必�
 | `get_task(task_id)` | 查询状态、进度和脱敏错误 |
 
 具体限制和失败语义见[字段诊断、无写入预览与批次核查](preview-verification.md)。预览仅是样本，FINISHED 和快照核查都不能替代业务验收。
+
+分享请使用[便携格式与私人绑定](portable-schemes.md)，不要公开原始本机数据库／旧方案响应。faker://contracts 提供 v1 机器 schema 和规则元数据；可选 FAKER_SCHEME_VALUES_FILE 提供本地替换配置，不把值传给 AI。同名导入默认冲突，仅明确选择才覆盖。
 
 `connection` 是私有连接文件中的名称，默认 `default`。任务执行时使用明确选择的连接配置，不盲用方案中遗留的旧连接。校验结果的 `scope=CONFIGURATION_ONLY`，未检查项包括真实数据库约束、已有候选、扩展安装和业务工作流。数据库与业务验收仍需执行。
 
