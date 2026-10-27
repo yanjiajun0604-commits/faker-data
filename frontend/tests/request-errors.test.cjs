@@ -17,9 +17,9 @@ function screen(responses, language = 'en') {
     if (data instanceof Error) throw data;
     return { data, status: 200, headers: {}, config };
   } });
-  const message = { error: text => notices.push(text), success: text => notices.push(text) };
+  const message = { error: text => notices.push(text), success: text => notices.push(text), warning: text => notices.push(text), info: text => notices.push(text) };
   const context = {
-    module: { exports: {} }, console, RuleEditor: {}, process: { env: {} },
+    module: { exports: {} }, console, RuleEditor: {}, TableOptions: {}, process: { env: {} },
     t: (key, values) => locale.translate(language, key, values),
     serverMessage: value => locale.localizeServerMessage(language, value),
     responseMessage: (response, fallback) => locale.localizeServerResponse(language, response, fallback),
@@ -75,6 +75,31 @@ test('using a saved ordinary scheme preserves field extensions and parent-row co
   assert.equal(state.component.step, 2);
   assert.equal(state.component.selectedTables[0].parentRows.rowsPerParent, 2);
   assert.equal(state.component.selectedTables[0].columns[0].regs[0].extension, 'codec');
+});
+
+test('loading advanced schemes preserves virtual rules, sources, tree and ownership without requiring fake physical columns', async () => {
+  const table={name:'rows',existingData:null,parentRows:{table:'parents',rowsPerParent:2},ownership:{mutableColumns:['state']},treeConfig:null,columns:[{name:'id',regs:[{code:'FIX.UUID'}]},{name:'role_marker',javaType:'java.lang.String',virtual:true,regs:[{code:'RES.INPUTAREA',inputs:[{value:'INPUT',weight:1}]}]}]};
+  const state=screen([{code:0,data:[{name:'rows',columns:[{name:'id',javaType:'java.lang.String'}]}]}]);
+  await state.component.loadSchemeConfig({tablesJson:JSON.stringify([table])});
+  const loaded=state.component.selectedTables[0];
+  assert.equal(loaded.columns.length,2);assert.equal(loaded.columns.find(c=>c.virtual).regs[0].inputs[0].value,'INPUT');assert.equal(loaded.ownership.mutableColumns[0],'state');assert.equal(loaded.parentRows.rowsPerParent,2);
+});
+
+test('missing physical columns report a translated warning while retaining valid fields', async () => {
+  const state=screen([{code:0,data:[{name:'rows',columns:[{name:'id'}]}]}]);
+  const warnings=[];state.component.$alert=async text=>warnings.push(text);
+  await state.component.loadSchemeConfig({tablesJson:JSON.stringify([{name:'rows',columns:[{name:'id',regs:[{code:'FIX.UUID'}]},{name:'removed'}]}])});
+  assert.equal(warnings.length,1);assert.match(warnings[0],/removed/);assert.equal(state.component.selectedTables[0].columns.length,1);
+});
+
+test('an empty local scheme list still opens the import entry', async () => {
+  const state=screen([{code:0,data:[]}]);await state.component.useHistoryScheme();assert.equal(state.component.schemeDialogVisible,true);
+});
+
+test('preview remains a separate no-generation API and returns field diagnostics to the result view', async () => {
+  const state=screen([{code:1,diagnostic:{table:'rows',column:'id',rulePath:'0'}}]);
+  state.component.selectedTables=[];await state.component.inspectGeneration('preview');
+  assert.deepEqual(state.requests,['/generation/preview']);assert.equal(state.component.inspectionVisible,true);assert.match(state.component.inspectionResult,/rulePath/);assert.equal(state.component.inspectionLoading,false);
 });
 
 test('one failed test-connection click produces exactly one actionable notification', async () => {

@@ -214,13 +214,22 @@
           </el-tab-pane>
           <el-tab-pane :label="$t(&quot;其他表字段&quot;)" name="other">
             <el-cascader
+              v-if="visible"
               :options="tablesCas"
               :props="props"
               @change="cascaderHandler()"
               clearable
-              v-model="localItem.refOtherTableColumn"
+              v-model="referenceSelection"
             ></el-cascader>
+            <p v-if="localItem.refOtherTableColumn && localItem.refOtherTableColumn.length && !referenceSelection.length" class="rule-desc">{{ $t('原引用不在当前已选字段中，请重新选择。') }}</p>
             <p class="rule-desc">{{ $t("高级匹配条件（JSON，可选）") }}</p>
+            <div class="match-builder">
+              <el-select v-model="matchColumn" filterable :placeholder="$t('候选表字段')"><el-option v-for="col in matchingColumns" :key="col.name" :label="col.name" :value="col.name" /></el-select>
+              <el-select v-model="matchKind"><el-option :label="$t('等于本行字段')" value="field" /><el-option :label="$t('等于固定值')" value="value" /></el-select>
+              <el-select v-if="matchKind==='field'" v-model="matchValue" filterable :placeholder="$t('本行字段')"><el-option v-for="col in selfTableColumns" :key="col.name" :value="col.name" :label="col.name" /></el-select>
+              <el-input v-else v-model="matchValue" :placeholder="$t('字符串或 JSON 标量，如 true、10、null')" />
+              <el-button size="small" @click="addMatchCondition">{{ $t('添加匹配') }}</el-button>
+            </div>
             <el-input type="textarea" :rows="4" v-model="refMatchText"
               placeholder='{"document_id":{"field":"document_id"},"role":{"value":"INPUT"}}' />
             <p class="rule-desc">{{ $t("field 引用本行字段，value 为固定值；留空按原方式轮转引用。") }}</p>
@@ -422,7 +431,7 @@
     :visible.sync="condRuleEditorVisible"
     :title="$t('编辑分支规则')"
     :init-item="condRuleCurrItem"
-    :tables-cas="[]"
+    :tables-cas="tablesCas"
     :self-table-columns="selfTableColumns"
     :modal="false"
     @save="handleCondRuleSave"
@@ -433,6 +442,7 @@
 
 <script>
 import { t } from "../i18n";
+import { scalar } from '../advanced-config';
 
 export default {
   name: "RuleEditor",
@@ -453,6 +463,7 @@ export default {
       activeRuleTab: "fixed",
       extensionParametersText: "{}",
       refMatchText: "",
+      matchColumn: '', matchKind: 'field', matchValue: '',
       activeRefTab: "self",
       localItem: {},
       props: {
@@ -487,6 +498,7 @@ export default {
         this.localItem = { ...this.createEmptyItem(), ...cloned };
         this.extensionParametersText = JSON.stringify(this.localItem.extensionParameters || {}, null, 2);
         this.refMatchText = this.localItem.refMatch ? JSON.stringify(this.localItem.refMatch, null, 2) : '';
+        this.matchColumn='';this.matchKind='field';this.matchValue='';
         // 深拷贝表级树形配置（不存在则用默认对象，保证模板不访问 null）
         this.localTreeConfig = this.treeConfig
           ? JSON.parse(JSON.stringify(this.treeConfig))
@@ -526,6 +538,11 @@ export default {
     },
   },
   computed: {
+    referenceSelection: {
+      get() { const selected=this.localItem.refOtherTableColumn || [];const table=this.tablesCas.find(t=>t.name===selected[0]);return table && (table.columns || []).some(c=>c.name===selected[1]) ? selected : []; },
+      set(value) { this.localItem.refOtherTableColumn=value; }
+    },
+    matchingColumns() { const selected=this.localItem.refOtherTableColumn || [];const table=this.tablesCas.find(t=>t.name===selected[0]);return table?table.columns:[]; },
     visibleSync: {
       get() {
         return this.visible;
@@ -575,6 +592,17 @@ export default {
     },
   },
   methods: {
+    addMatchCondition() {
+      try {
+        if(!this.matchColumn || this.matchKind==='field' && !this.matchValue)throw new Error();
+        const match=this.refMatchText.trim()?JSON.parse(this.refMatchText):{};
+        if(!match || Array.isArray(match) || typeof match!=='object' || ['__proto__','constructor','prototype'].includes(this.matchColumn))throw new Error();
+        let value=this.matchValue;
+        if(this.matchKind==='value') value=scalar(value);
+        Object.defineProperty(match,this.matchColumn,{value:{[this.matchKind]:value},enumerable:true,configurable:true,writable:true});
+        this.refMatchText=JSON.stringify(match,null,2);this.localItem.code='REF.OTHER_TABLE';
+      } catch(_) { this.$message.warning(t('请选择匹配字段，并保持 JSON 条件有效')); }
+    },
     createEmptyItem() {
       return {
         code: "",
@@ -847,6 +875,8 @@ export default {
 </script>
 
 <style lang="less" scoped>
+.match-builder { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.match-builder>.el-select,.match-builder>.el-input { flex:1 1 140px; min-width:120px; }
 .rule-tag {
   margin: 2px 4px;
   cursor: pointer;
