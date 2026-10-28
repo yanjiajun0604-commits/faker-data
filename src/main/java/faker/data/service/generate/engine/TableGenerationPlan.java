@@ -18,11 +18,21 @@ final class TableGenerationPlan {
     final Map<String,Map<String,Long>> ruleUses=new LinkedHashMap<>();
     boolean hasFieldExtensions;
     private final boolean auditRules;
+    private final boolean preview;
+    private final boolean portable;
 
     TableGenerationPlan(TableVO table) {
         this(table,false);
     }
     TableGenerationPlan(TableVO table,boolean auditRules) {
+        this(table,auditRules,false);
+    }
+    TableGenerationPlan(TableVO table,boolean auditRules,boolean preview) {
+        this(table,auditRules,preview,false);
+    }
+    TableGenerationPlan(TableVO table,boolean auditRules,boolean preview,boolean portable) {
+        this.portable=portable;
+        this.preview=preview;
         this.auditRules=auditRules;
         this.table=table;
         lowerTable=table.getName().toLowerCase(Locale.ROOT);
@@ -46,7 +56,7 @@ final class TableGenerationPlan {
         ColumnPlan(ColumnInfo source) {
             this.source=source;name=source.getName();lowerName=name.toLowerCase(Locale.ROOT);
             cacheKey=lowerTable+":"+lowerName;
-            rules=prepareRules(source.getRegs());
+            rules=prepareRules(source.getRegs(),name,"regs");
             rejectNestedExtensions(source.getRegs(),false);
             for(MetaTypeVO rule:source.getRegs()==null?Collections.<MetaTypeVO>emptyList():source.getRegs())if("EXT.FIELD".equals(rule.getCode())) {
                 if(source.getRegs().size()!=1 || source.isDepended())throw new IllegalArgumentException("FIELD_EXTENSION_MUST_BE_STANDALONE_AND_NOT_REFERENCED");
@@ -63,10 +73,10 @@ final class TableGenerationPlan {
         }
     }
 
-    private PreparedRule[] prepareRules(List<MetaTypeVO> rules) {
+    private PreparedRule[] prepareRules(List<MetaTypeVO> rules,String column,String path) {
         if(rules==null)return new PreparedRule[0];
         PreparedRule[] prepared=new PreparedRule[rules.size()];
-        for(int i=0;i<prepared.length;i++)prepared[i]=new PreparedRule(rules.get(i));
+        for(int i=0;i<prepared.length;i++){MetaTypeVO rule=rules.get(i);String location=path+"["+i+"]";try{prepared[i]=new PreparedRule(rule,column,location);}catch(RuntimeException error){throw GenerationProblem.at(error,table.getName(),column,location,rule==null?null:rule.getCode(),null,"INVALID_RULE_ARGUMENTS");}}
         return prepared;
     }
 
@@ -79,22 +89,28 @@ final class TableGenerationPlan {
         final CondExprMetaType condition;
         final Expression expression;
         final PreparedRule[] yes,no;
-        PreparedRule(MetaTypeVO source) {
+        final String columnName,path;
+        PreparedRule(MetaTypeVO source,String columnName,String path) {
+            this.columnName=columnName;this.path=path;
             RuleArguments.check(source);
             this.source=source;
             strategy=MetaTypeFactory.getMetaTypeImpl(source);
             if(strategy==null)throw new IllegalArgumentException("不支持的生成规则："+source.getCode());
+            if(preview)PreviewSafety.rule(source,strategy);
             selfIndex=source.getRefSelfColumn()==null?null:indices.get(source.getRefSelfColumn().toLowerCase(Locale.ROOT));
             if(source.getRefSelfColumn()!=null && selfIndex==null)throw new IllegalArgumentException("Unknown refSelfColumn: "+source.getRefSelfColumn());
             String[] ref=source.getRefOtherTableColumn();
             referenceTable=ref==null || ref.length==0?null:ref[0].toLowerCase(Locale.ROOT);
             lookup=source.getRefMatch()==null?null:new ReferenceLookup(source);
             condition=strategy instanceof CondExprMetaType?(CondExprMetaType)strategy:null;
-            expression=condition==null?null:condition.prepare(source);
-            yes=condition==null?null:prepareRules(source.getOnTrue());
-            no=condition==null?null:prepareRules(source.getOnFalse());
+            expression=condition==null?null:portable?new org.springframework.expression.spel.standard.SpelExpressionParser().parseExpression(source.getCondition()):preview?PreviewSafety.expression(source.getCondition()):condition.prepare(source);
+            yes=condition==null?null:prepareRules(source.getOnTrue(),columnName,path+".onTrue");
+            no=condition==null?null:prepareRules(source.getOnFalse(),columnName,path+".onFalse");
         }
         Object evaluate(RowCursor row, ColumnPlan column) {
+            try{return evaluateValue(row,column);}catch(RuntimeException error){throw GenerationProblem.at(error,table.getName(),columnName,path,source.getCode(),row.index,"RULE_EXECUTION_FAILED");}
+        }
+        private Object evaluateValue(RowCursor row, ColumnPlan column) {
             if(auditRules)ruleUses.computeIfAbsent(column.name,k->new LinkedHashMap<>()).merge(source.getCode()==null?"EMPTY":source.getCode(),1L,Long::sum);
             Object self=selfIndex==null?null:row.generateColumn(selfIndex);
             // 递归同表引用会复用上下文，必须在递归返回后恢复当前规则参数。
@@ -110,7 +126,7 @@ final class TableGenerationPlan {
                 row.args.put("refRowId",selected);
             } else row.args.remove("refRowId");
             if(condition!=null) {
-                PreparedRule[] branch=condition.evaluate(expression,source,row.values)?yes:no;
+                PreparedRule[] branch=(preview?PreviewSafety.evaluate(expression,row.values):condition.evaluate(expression,source,row.values))?yes:no;
                 if(branch.length==0)return null;
                 return concatenate(branch,row,column,false);
             }

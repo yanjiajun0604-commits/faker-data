@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Builder
 public class TaskProcessVO {
+    public TaskProcessVO(Double progress,TaskState state,String errorMsg,String result){this(progress,state,errorMsg,result,null);}
     /** 执行进度（0-100） */
     private Double progress;
     /** 任务状态 */
@@ -21,4 +22,5 @@ public class TaskProcessVO {
     private String errorMsg;
     /** 任务结果描述（如"执行完成"、"执行异常"） */
     private String result;
+    private java.util.Map<String,Object> diagnostic;
 }

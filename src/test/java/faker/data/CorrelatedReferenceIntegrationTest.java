@@ -60,7 +60,11 @@ class CorrelatedReferenceIntegrationTest {
             column("document_id","java.lang.String",reference("documents","id"))),1);
         return Arrays.asList(tasks,contents,docs);
     }
-    void generate(List<TableVO> tables){engine.generate(source,tables,mock(AsyncTaskMonitor.class),executor);}
+    void generate(List<TableVO> tables){
+        // 两次独立生成应有不同任务身份；同一任务不能登记成两个写入批次。
+        task=UUID.randomUUID().toString();when(executor.getTaskId()).thenReturn(task);
+        try{engine.generate(source,tables,mock(AsyncTaskMonitor.class),executor);}finally{cache.removeTask(task);}
+    }
     @Test void selectsContentByCurrentDocumentAndRoleAcrossRepeatedRuns()throws Exception{
         generate(recipe("INPUT","",2));generate(recipe("INPUT","",2));
         assertEquals(4,jdbc.queryForObject("SELECT COUNT(*) FROM tasks",Integer.class));

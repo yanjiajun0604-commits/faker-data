@@ -29,6 +29,12 @@
         <directory>${basedir}/src/main/resources</directory>
         <filtering>false</filtering>
       </resource>
+      <resource>
+        <directory>${basedir}/contracts</directory>
+        <targetPath>contracts</targetPath>
+        <filtering>false</filtering>
+        <includes><include>*.json</include><include>README.md</include></includes>
+      </resource>
     </resources>
     <plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><configuration><excludes><exclude><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId></exclude></excludes></configuration></plugin></plugins></build>
 </project>

@@ -1,0 +1,18 @@
+{
+  "format": "faker-data.contracts",
+  "formatVersion": 1,
+  "schemeFormat": "faker-data.scheme",
+  "schemeVersions": [
+    1
+  ],
+  "files": [
+    "scheme-v1.schema.json",
+    "rules-v1.json",
+    "diagnostics-v1.json",
+    "field-extension-manifest-v1.schema.json",
+    "field-extension-request-v1.schema.json",
+    "field-extension-response-v1.schema.json"
+  ],
+  "fieldExtensionProtocol": "faker-field-extension/1",
+  "notes": "Schemas describe shape; semantic rules, installed extensions, DB metadata and authorization are checked separately. Current source preview, not a release declaration."
+}

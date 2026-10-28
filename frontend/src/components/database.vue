@@ -185,6 +185,8 @@
       <div slot="header" class="card-header">
         <span><i class="el-icon-setting"></i> {{ $t("配置字段生成规则") }}</span>
         <div>
+          <el-button size="small" :loading="inspectionLoading" @click="inspectGeneration('preview')">{{ $t('预览样本') }}</el-button>
+          <el-button size="small" :loading="inspectionLoading" @click="inspectGeneration('preflight')">{{ $t('数据库预检') }}</el-button>
           <el-button type="success" size="small" @click="editGenDataSize">{{
             editSizeVisible ? $t("完成数据量设置") : $t("设置数据量")
           }}</el-button>
@@ -215,10 +217,13 @@
       >
         <el-table-column type="index" width="60"> </el-table-column>
         <el-table-column prop="name" :label="$t(&quot;表名&quot;)" min-width="200">
+          <template slot-scope="scope"><strong>{{ scope.row.name }}</strong><div class="table-source-caption">{{ scope.row.existingData ? $t('只读引用现存行') : scope.row.parentRows ? $t('按父行展开') + ' · ' + scope.row.parentRows.table : $t('生成新行') }}</div></template>
         </el-table-column>
         <el-table-column :label="$t(&quot;数据量&quot;)" width="220">
           <template slot-scope="scope">
-            <template v-if="scope.row.treeConfig">
+            <el-tag v-if="scope.row.existingData" type="info" size="small">{{ $t('只读候选') }}</el-tag>
+            <el-tag v-else-if="scope.row.parentRows" size="small">{{ scope.row.parentRows.rowsPerParent }} {{ $t('行 / 父行') }}</el-tag>
+            <template v-else-if="scope.row.treeConfig">
               <el-tag type="warning" size="small">{{ $t("由树结构决定") }}</el-tag>
             </template>
             <template v-else>
@@ -240,8 +245,10 @@
           <template slot-scope="scope">
 
             <div style="background: #fff; border: 1px solid #e4e7ed; border-radius: 6px; padding: 8px">
+              <el-alert v-if="scope.row.existingData" :title="$t('只读候选表不执行字段生成规则。')" type="info" :closable="false" />
               <el-table :data="scope.row.columns" class="inner-table">
                 <el-table-column prop="name" :label="$t(&quot;字段名&quot;)" width="180">
+                  <template slot-scope="field"><span>{{ field.row.name }}</span><el-tag v-if="field.row.virtual" size="mini" type="info">{{ $t('虚拟') }}</el-tag></template>
                 </el-table-column>
                 <el-table-column prop="dbType" :label="$t(&quot;类型&quot;)" width="140">
                 </el-table-column>
@@ -267,6 +274,8 @@
 
               <el-table-column :label="$t(&quot;生成规则&quot;)" min-width="320">
                 <template slot-scope="subScope">
+                  <span v-if="scope.row.existingData">{{ $t('从数据库读取') }}</span>
+                  <template v-else>
                   <!-- 未配置任何规则：蓝色"配置"按钮 -->
                   <el-button
                     v-if="
@@ -306,14 +315,16 @@
                       ></span>
                     </el-tooltip>
                   </template>
+                  </template>
                 </template>
               </el-table-column>
               </el-table>
               </div>
           </template>
         </el-table-column>
-        <el-table-column :label="$t(&quot;操作&quot;)" width="80" fixed="right">
+        <el-table-column :label="$t(&quot;操作&quot;)" width="150" fixed="right">
           <template slot-scope="scope">
+            <el-button type="text" size="mini" @click="openTableOptions(scope.row)">{{ $t('行与关联') }}</el-button>
             <el-button
               type="danger"
               size="mini"
@@ -415,6 +426,31 @@
     @cancel="handleRuleCancel"
     @tree-config-change="handleTreeConfigChange"
   />
+  <TableOptions :visible.sync="tableOptionsVisible" :table="optionsTable" :tables="selectedTables" :catalog-columns="optionsCatalogColumns" @save="applyTableOptions" />
+  <el-dialog :title="inspectionTitle" :visible.sync="inspectionVisible" width="860px" class="advanced-dialog" top="5vh">
+    <p>{{ $t('预览不写库，不运行字段扩展；样本不代表完整任务的业务验收。预检只检查可静态判断的约束。') }}</p>
+    <div v-if="inspectionData" class="inspection-body">
+      <template v-if="inspectionData.tables && inspectionKind==='preview'">
+        <el-alert :type="inspectionData.sampleValid ? 'success' : 'warning'" :title="inspectionData.sampleValid ? $t('样本预览通过') : $t('样本需要检查')" :closable="false" />
+        <p>{{ $t('样本行数') }}: {{ inspectionData.generatedRows }} · {{ $t('跳过的扩展字段') }}: {{ inspectionData.omittedExtensionFields }}</p>
+        <section v-for="table in inspectionData.tables" :key="table.name" class="preview-table">
+          <h3>{{ table.name }} <small>{{ table.sampledRows }} {{ $t('行') }}</small></h3>
+          <el-table :data="table.rows" size="mini" border><el-table-column v-for="(column,index) in table.columns" :key="column.name" :label="column.name + (column.virtual ? ' · ' + $t('虚拟') : '')" min-width="160"><template slot-scope="cell">{{ previewCell(cell.row[index]) }}</template></el-table-column></el-table>
+        </section>
+      </template>
+      <el-alert v-else-if="inspectionData.valid !== undefined" :title="inspectionData.valid ? $t('数据库预检通过') : $t('数据库预检未通过')" :type="inspectionData.valid ? 'success' : 'error'" :closable="false" />
+      <el-table v-if="inspectionIssues.length" :data="inspectionIssues" size="small" class="inspection-issues"><el-table-column prop="table" :label="$t('表名')" min-width="140" /><el-table-column prop="column" :label="$t('字段名')" min-width="100" /><el-table-column prop="code" :label="$t('诊断代码')" min-width="180" /><el-table-column prop="message" :label="$t('说明')" min-width="280" /></el-table>
+    </div>
+    <details class="inspection-details" :open="!inspectionData || !inspectionData.tables"><summary>{{ $t('查看完整诊断与限制') }}</summary><pre class="advanced-json">{{ inspectionResult }}</pre></details>
+  </el-dialog>
+  <el-dialog :title="$t('导入分享方案')" :visible.sync="importVisible" width="760px" class="advanced-dialog" top="5vh">
+    <p>{{ $t('粘贴分享文件内容，绑定首页表单中的本机连接。只保存配置，不生成数据。') }}</p>
+    <el-input type="textarea" :rows="9" v-model="importDocument" :aria-label="$t('分享方案 JSON')" />
+    <p>{{ $t('本机私有值（JSON 指针到值；不需要时填 {}）') }}</p>
+    <el-input type="textarea" :rows="4" v-model="importValues" :aria-label="$t('本机私有值')" />
+    <el-checkbox v-model="importTrust">{{ $t('我已审查并信任此方案引用的扩展与高级表达式') }}</el-checkbox>
+    <span slot="footer"><el-button @click="importVisible=false">{{ $t('取消') }}</el-button><el-button type="primary" :loading="importLoading" @click="importPortableScheme">{{ $t('绑定本机连接并保存') }}</el-button></span>
+  </el-dialog>
 
   <!-- 历史方案选择弹窗 -->
   <el-dialog
@@ -422,6 +458,7 @@
     :visible.sync="schemeDialogVisible"
     width="1000px"
   >
+    <div class="scheme-tools"><el-button size="small" icon="el-icon-upload2" @click="importVisible=true">{{ $t('导入分享方案') }}</el-button><small>{{ $t('导出文件不含连接信息；分享前仍请检查业务内容。') }}</small></div>
     <el-table :data="schemeList" stripe>
       <el-table-column prop="id" label="ID" width="60"> </el-table-column>
       <el-table-column prop="name" :label="$t(&quot;方案名称&quot;)" min-width="150">
@@ -443,7 +480,7 @@
           }}
         </template>
       </el-table-column>
-      <el-table-column :label="$t(&quot;操作&quot;)" width="160" fixed="right">
+      <el-table-column :label="$t(&quot;操作&quot;)" width="230" fixed="right">
         <template slot-scope="scope">
           <el-button
             type="primary"
@@ -451,6 +488,7 @@
             @click="onSchemePick(scope.row)"
             >{{ $t("使用") }}</el-button
           >
+          <el-button size="mini" @click="exportPortableScheme(scope.row)">{{ $t('导出') }}</el-button>
           <el-button
             type="danger"
             size="mini"
@@ -468,12 +506,16 @@
 import { t, languageState, setLanguage, serverMessage, responseMessage } from "../i18n";
 
 import RuleEditor from "./RuleEditor.vue";
+import TableOptions from './TableOptions.vue';
 
 export default {
   name: "Database-Info",
-  components: { RuleEditor },
+  components: { RuleEditor, TableOptions },
   data() {
     return {
+      tableOptionsVisible: false, optionsTable: null, optionsCatalogColumns: [],
+      inspectionLoading: false, inspectionVisible: false, inspectionResult: '', inspectionData: null, inspectionKind: 'preview',
+      importVisible: false, importDocument: '', importValues: '{}', importTrust: false, importLoading: false,
       //任务进度
       process: 0,
       currentTaskId: "",
@@ -566,6 +608,8 @@ export default {
   },
 
   computed: {
+    inspectionTitle() { return this.inspectionKind === 'preview' ? t('预览样本') : t('数据库预检'); },
+    inspectionIssues() { const payload=this.inspectionData && (this.inspectionData.preflight || this.inspectionData);return payload ? [...(payload.errors || []),...(payload.warnings || [])] : []; },
     language: { get() { return languageState.language; }, set(value) { setLanguage(value); } },
     guideUrl() { return this.language === "en" ? "./AI_USAGE.en.md" : "./AI_USAGE.md"; },
     ruleDialogTitle() {
@@ -646,6 +690,44 @@ export default {
   },
 
   methods: {
+    previewCell(value) { return value===null ? 'NULL' : typeof value==='object' ? JSON.stringify(value) : String(value); },
+    async openTableOptions(table) {
+      this.optionsTable=table;this.tableOptionsVisible=false;this.optionsCatalogColumns=[];
+      try {
+        const {data:res}=await this.columnLists(table.name);
+        if(this.optionsTable!==table)return;
+        if(res.code!==0){this.$message.error(responseMessage(res));return;}
+        this.optionsCatalogColumns=res.data || [];this.tableOptionsVisible=true;
+      } catch (_) { /* The shared HTTP interceptor reports network errors once. */ }
+    },
+    applyTableOptions(table) { const index=this.selectedTables.findIndex(t=>t.name===table.name);if(index>=0)this.$set(this.selectedTables,index,table); },
+    async inspectGeneration(kind) {
+      this.inspectionLoading=true;this.inspectionKind=kind;
+      try {
+        this.prepareTreeConfigs();
+        const {data:res}=await this.$http.post(`generation/${kind}`,{dataSource:this.form,tables:this.selectedTables,rowsPerTable:5});
+        this.inspectionData=res.code===0?res.data:null;this.inspectionResult=JSON.stringify(res.code===0?res.data:res,null,2);this.inspectionVisible=true;
+      } catch (_) { /* HTTP errors already have one shared notification. */ }
+      finally { this.inspectionLoading=false; }
+    },
+    async exportPortableScheme(scheme) {
+      try {
+        const {data:res}=await this.$http.get(`scheme/${scheme.id}/export`);
+        if(res.code!==0)return this.$message.error(responseMessage(res));
+        const blob=new Blob([JSON.stringify(res.data,null,2)],{type:'application/json;charset=utf-8'});
+        const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`faker-scheme-${scheme.id}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      } catch (_) { /* Shared HTTP notification. */ }
+    },
+    async importPortableScheme() {
+      let document,replacements;
+      try { document=JSON.parse(this.importDocument);replacements=JSON.parse(this.importValues);if(!document || Array.isArray(document) || typeof document!=='object' || !replacements || Array.isArray(replacements) || typeof replacements!=='object')throw new Error(); }
+      catch(_) { return this.$message.warning(t('请填写有效的方案和私有值 JSON 对象')); }
+      if(!this.form.url || !this.form.username)return this.$message.warning(t('请先在首页填写本机连接信息'));
+      this.importLoading=true;
+      try { const {data:res}=await this.$http.post('scheme/import',{document,replacements,dataSource:this.form,confirmTrustedCode:this.importTrust});if(res.code!==0)return this.$message.error(responseMessage(res));this.importVisible=false;this.importDocument='';this.importValues='{}';this.importTrust=false;const {data:list}=await this.$http.get('scheme/list');if(list.code===0)this.schemeList=list.data;this.$message.success(t('方案已导入，点击使用检查规则后再生成')); }
+      catch(_) { /* Shared HTTP notification. */ }
+      finally { this.importLoading=false; }
+    },
     ruleLabel(code) {
       if (code === null || typeof code === 'undefined') return t('空值');
       if (code === 'EXT.FIELD') return t('字段扩展');
@@ -718,11 +800,10 @@ export default {
       // 提交前校验
       const errors = this.validateGenSubmit();
       if (errors.length > 0) {
-        const msg = errors.map((e, i) => `${i + 1}. ${e}`).join("<br>");
+        const msg = errors.map((e, i) => `${i + 1}. ${e}`).join("\n");
         return this.$alert(msg, t("校验未通过"), {
           confirmButtonText: t("知道了"),
           type: "error",
-          dangerouslyUseHTMLString: true,
         });
       }
 
@@ -1078,10 +1159,7 @@ export default {
         if (res.code !== 0) {
           return this.$message.error(responseMessage(res) || t("获取方案列表失败"));
         }
-        if (!res.data || res.data.length === 0) {
-          return this.$message.info(t("暂无历史方案"));
-        }
-        this.schemeList = res.data;
+        this.schemeList = res.data || [];
         this.schemeDialogVisible = true;
       }
     },
@@ -1155,6 +1233,7 @@ export default {
         const validCols = [];
         const missCols = [];
         for (const savedCol of savedTable.columns || []) {
+          if (savedCol.virtual) { validCols.push(JSON.parse(JSON.stringify(savedCol)));continue; }
           const ac = actualCols.find(
             (c) => (c.name || "").toLowerCase() === (savedCol.name || "").toLowerCase()
           );
@@ -1186,8 +1265,8 @@ export default {
         if (missingTables.length > 0) {
           msg += t("以下表已不存在，将被忽略: {p0}\n", {p0: missingTables.join(", ")});
         }
-        for (const [t, cols] of Object.entries(missingColumns)) {
-          msg += t("表【{p0}】中以下字段已不存在: {p1}\n", {p0: t, p1: cols.join(", ")});
+        for (const [tableName, cols] of Object.entries(missingColumns)) {
+          msg += t("表【{p0}】中以下字段已不存在: {p1}\n", {p0: tableName, p1: cols.join(", ")});
         }
         await this.$alert(msg, t("部分配置已失效"), {
           confirmButtonText: t("我知道了"),
@@ -1530,6 +1609,11 @@ export default {
 </script>
 
 <style lang="less" scoped>
+.table-source-caption { margin-top:6px; font-size:12px; color:#606266; }
+.advanced-json { white-space:pre-wrap; overflow-wrap:anywhere; max-height:55vh; overflow:auto; padding:16px; background:#f5f7fa; border-radius:8px; font-size:12px; line-height:1.6; }
+.inspection-body { max-height:55vh; overflow:auto; }.preview-table { margin:20px 0; }.preview-table h3 { font-size:14px; }.preview-table small { color:#606266; font-weight:400; margin-left:8px; }.inspection-issues { margin-top:16px; }.inspection-details { margin-top:16px; }.inspection-details summary { cursor:pointer; color:#606266; padding:8px 0; }
+.scheme-tools { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+.scheme-tools small { color:#606266; }
 // 工作空间主题
 .language-switch { display: inline-flex; align-items: center; gap: 6px; color: #476256; }
 .language-switch select { background: #fff; border: 1px solid #dce6df; border-radius: 6px; color: #304c3b; padding: 5px 7px; font: inherit; cursor: pointer; }
@@ -2086,6 +2170,10 @@ export default {
 </style>
 
 <style lang="less">
+.advanced-dialog .el-dialog { max-width:calc(100vw - 32px); }
+.advanced-dialog .el-dialog__body { word-break:normal; overflow-wrap:anywhere; }
+.advanced-dialog .el-dialog__title { display:block; padding-right:24px; overflow-wrap:anywhere; }
+.advanced-dialog .el-alert__content,.advanced-dialog .el-alert__title { word-break:normal; overflow-wrap:anywhere; }
 /* 弹窗渲染在 body 下，需使用非 scoped 样式 */
 .rule-dialog {
   .el-input {

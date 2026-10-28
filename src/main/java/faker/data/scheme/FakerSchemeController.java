@@ -18,6 +18,8 @@ import java.util.List;
 @RestController
 @RequestMapping("scheme")
 public class FakerSchemeController {
+    @org.springframework.web.bind.annotation.ExceptionHandler(IllegalArgumentException.class)
+    public R invalid(IllegalArgumentException error){return R.error(error.getMessage());}
 
     @Autowired
     private FakerSchemeService service;

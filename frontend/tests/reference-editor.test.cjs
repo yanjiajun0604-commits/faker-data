@@ -10,7 +10,7 @@ function editor() {
   const component = compiler.parseComponent(fs.readFileSync(path.join(__dirname, '../src/components/RuleEditor.vue'), 'utf8'));
   const template = compiler.compile(component.template.content);
   assert.deepEqual(template.errors, []);
-  const context = { module: { exports: {} }, t: key => key };
+  const context = { module: { exports: {} }, t: key => key, scalar:require('../src/advanced-config').scalar };
   vm.createContext(context);
   vm.runInContext(component.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'module.exports ='), context);
   const options = context.module.exports;
@@ -55,4 +55,20 @@ test('opening a saved exact reference restores its editable configuration', () =
   options.watch.visible.call(instance, true);
   assert.equal(JSON.parse(instance.refMatchText).role.value, 'INPUT');
   assert.equal(instance.activeRefTab, 'other');
+});
+
+test('matching helper appends typed fixed values and current-row fields without losing other conditions', () => {
+  const {instance}=editor();
+  instance.localItem={};instance.refMatchText='{"role":{"value":"INPUT"}}';
+  instance.matchColumn='document_id';instance.matchKind='field';instance.matchValue='document_id';instance.addMatchCondition();
+  instance.matchColumn='active';instance.matchKind='value';instance.matchValue='true';instance.addMatchCondition();
+  const match=JSON.parse(instance.refMatchText);
+  assert.deepEqual(match,{role:{value:'INPUT'},document_id:{field:'document_id'},active:{value:true}});
+  assert.equal(instance.localItem.code,'REF.OTHER_TABLE');
+});
+
+test('changing schemes cannot feed a removed reference path to the cascader or silently erase the rule',()=>{
+  const {instance,options}=editor();instance.localItem={refOtherTableColumn:['previous','id']};instance.tablesCas=[{name:'current',columns:[{name:'id'}]}];
+  assert.equal(options.computed.referenceSelection.get.call(instance).length,0);assert.equal(instance.localItem.refOtherTableColumn[0],'previous');
+  instance.tablesCas=[{name:'previous',columns:[{name:'id'}]}];assert.equal(options.computed.referenceSelection.get.call(instance)[0],'previous');
 });

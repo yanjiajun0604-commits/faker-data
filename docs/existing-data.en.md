@@ -73,7 +73,7 @@ The [request JSON](../examples/generate-existing-data.json) reads the two eligib
 
 ```sh
 python examples/ai_client.py --request examples/generate-existing-data.json
-python examples/ai_client.py --request examples/generate-existing-data.json --submit --timeout 300
+python examples/ai_client.py --request examples/generate-existing-data.json --submit --request-id example-existing-data-run-001 --timeout 300
 ```
 
 Follow the [AI guide](../AI_USAGE.en.md) for connection settings, local credentials, authorization and task polling. Temporary H2 integration tests exercise this JSON, field alignment, snapshot reuse, overflow, empty results, parameter binding, parent filtering and rollback. Real MySQL, Oracle, Dameng and application acceptance require separate testing.

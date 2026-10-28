@@ -1,5 +1,6 @@
 """Adapter boundary tests; real protocol + Java generation is a separate integration test."""
 import importlib.util
+import asyncio
 import json
 from pathlib import Path
 import tempfile
@@ -12,10 +13,57 @@ spec.loader.exec_module(server)
 
 
 class AdapterTest(unittest.TestCase):
+    def test_database_inspection_tools_are_discoverable_and_read_only(self):
+        tools = {tool.name: tool for tool in asyncio.run(server.mcp.list_tools())}
+        for name in ("list_tables", "describe_table", "read_rows", "preview_generation", "verify_batch"):
+            self.assertIn(name, tools)
+            self.assertTrue(tools[name].annotations.readOnlyHint)
+            self.assertFalse(tools[name].annotations.destructiveHint)
+            self.assertIsNotNone(tools[name].outputSchema)
+        self.assertNotIn("sql", tools["read_rows"].inputSchema["properties"])
+
+    def test_row_reads_use_the_selected_private_profile_and_preserve_values(self):
+        fixture = {"type": "MYSQL", "url": "jdbc:mysql://localhost/demo", "username": "reader", "password": "test-secret"}
+        where = [{"column": "name", "op": "eq", "value": "O'Reilly"}]
+        with patch.object(server.api, "connection", return_value=fixture) as profile, patch.object(
+                server.api, "request", return_value={"columns": ["id"], "rows": [["123"]]}) as request:
+            result = server.read_rows("customers", ["id"], where=where, connection="readonly")
+            profile.assert_called_once_with("readonly")
+            self.assertEqual("/db/readRows", request.call_args.args[0])
+            body = request.call_args.args[1]
+            self.assertEqual(where, body["where"])
+            self.assertEqual(20, body["limit"])
+            self.assertEqual(fixture, body["dataSource"])
+            self.assertNotIn("test-secret", str(result))
+
     def test_generation_requires_authorized_write_before_any_api_access(self):
         with patch.object(server.api, "request") as request:
             with self.assertRaises(server.ToolError):
                 server.generate_data(1)
+            request.assert_not_called()
+
+    def test_failed_database_preflight_never_submits_generation(self):
+        row = {"id": 1, "kind": "RULES", "tablesJson": "[]"}
+        with patch.object(server.api, "connection", return_value={}), patch.object(server.api, "request", return_value=row) as request, patch.object(
+                server, "validate_generation"), patch.object(server, "preflight_generation", return_value={"valid": False, "errors": [{"code": "COLUMN_NOT_FOUND"}]}):
+            with self.assertRaises(server.ToolError):
+                server.generate_data(1, confirm_write=True, request_id="preflight-test-request")
+            self.assertFalse(any(call.args[0].startswith("/publish/") for call in request.call_args_list))
+
+    def test_authorized_generation_requires_a_stable_caller_request_id(self):
+        with patch.object(server.api, "request") as request:
+            with self.assertRaises(server.ToolError):
+                server.generate_data(1, confirm_write=True)
+            request.assert_not_called()
+
+    def test_cleanup_requires_explicit_authorization_and_cannot_escape_paths(self):
+        with patch.object(server.api, "request") as request:
+            with self.assertRaises(server.ToolError):
+                server.execute_cleanup("batch-id", "plan-id", "a" * 64)
+            with self.assertRaises(server.ToolError):
+                server.execute_cleanup("../bad", "plan-id", "a" * 64, confirm_delete=True)
+            with self.assertRaises(server.ToolError):
+                server.get_cleanup("batch-id", "../bad")
             request.assert_not_called()
 
     def test_only_local_service_urls_are_accepted(self):
@@ -23,10 +71,80 @@ class AdapterTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 server.JavaAPI(url, None)
 
+    def test_cleanup_plan_keys_are_paginated_with_no_target_calls(self):
+        with patch.object(server.api, "request", side_effect=[{"state": "READY"}, {"rows": [{"origin": "DERIVED"}]}]) as request:
+            result = server.get_cleanup("batch-id", "plan-id", include_rows=True, offset=100, limit=50)
+            self.assertEqual("DERIVED", result["rowPage"]["rows"][0]["origin"])
+            self.assertEqual(["/batches/batch-id/cleanup/plans/plan-id", "/batches/batch-id/cleanup/plans/plan-id/rows?offset=100&limit=50"], [c.args[0] for c in request.call_args_list])
+        with patch.object(server.api, "request") as request:
+            with self.assertRaises(server.ToolError):
+                server.get_cleanup("batch-id", "plan-id", include_rows=True, limit=201)
+            request.assert_not_called()
+
+    def test_preview_and_verification_limits_reject_before_api_access(self):
+        with patch.object(server.api, "request") as request:
+            with self.assertRaises(server.ToolError):
+                server.preview_generation([], rows_per_table=5)
+            with self.assertRaises(server.ToolError):
+                server.preview_generation([{}], rows_per_table=21)
+            with self.assertRaises(server.ToolError):
+                server.verify_batch("../bad")
+            with self.assertRaises(server.ToolError):
+                server.verify_batch("valid-batch", checks=[{}] * 21)
+            request.assert_not_called()
+
+    def test_portable_export_preserves_null_keys_and_json_pointers(self):
+        document = {"format": "faker-data.scheme", "formatVersion": 1, "tables": [{"existingData": {"where": {"password": None}}}],
+                    "requiredLocalValues": [{"pointer": "/tables/0/existingData/where/password", "reason": "LOCAL_SOURCE_SELECTOR"}]}
+        with patch.object(server.api, "request", return_value=document):
+            self.assertEqual(document, server.export_scheme(1))
+
+    def test_private_values_are_not_tool_arguments_or_outputs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "private.json"
+            path.write_text(json.dumps({"demo": {"/tables/0/columns/0/regs/0/inputs/0/value": "binding-secret"}}), encoding="utf-8")
+            client = server.JavaAPI("http://127.0.0.1:8085", None, str(path))
+            self.assertEqual({"/tables/0/columns/0/regs/0/inputs/0/value": "binding-secret"}, client.private_values("demo"))
+            self.assertEqual("[REDACTED]", client.scrub("binding-secret"))
+            with patch.object(server, "api", client), patch.object(client, "connection", return_value={}), patch.object(client, "request", return_value={"schemeId": 3}) as request:
+                self.assertEqual({"schemeId": 3}, server.import_scheme({"format": "faker-data.scheme"}, values_profile="demo"))
+                self.assertIn("binding-secret", str(request.call_args.args[1]["replacements"]))
+            tools = {t.name: t for t in asyncio.run(server.mcp.list_tools())}
+            self.assertNotIn("replacements", tools["import_scheme"].inputSchema["properties"])
+            self.assertNotIn("password", tools["import_scheme"].inputSchema["properties"])
+
+    def test_private_rule_values_do_not_hide_public_rule_codes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "private.json"
+            path.write_text(json.dumps({"demo": {"/tables/0/columns/0/regs": [{"code": "RES.INPUTAREA", "inputs": [{"value": "binding-secret"}]}]}}), encoding="utf-8")
+            client = server.JavaAPI("http://127.0.0.1:8085", None, str(path))
+            self.assertEqual({"code": "RES.INPUTAREA", "value": "[REDACTED]"}, client.scrub({"code": "RES.INPUTAREA", "value": "binding-secret"}))
+
+    def test_longer_private_values_are_redacted_before_their_prefixes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "private.json"
+            path.write_text(json.dumps({"demo": {"/a": "binding", "/b": "binding-secret"}}), encoding="utf-8")
+            self.assertEqual("[REDACTED]", server.JavaAPI("http://127.0.0.1:8085", None, str(path)).scrub("binding-secret"))
+
     def test_scheme_output_excludes_connection_secrets(self):
-        row = {"id": 1, "name": "orders", "dataSourceJson": "secret", "tablesJson": "[]"}
-        with patch.object(server.api, "request", return_value=row):
-            self.assertEqual({"id": 1, "name": "orders", "kind": "RULES", "tables": []}, server.get_scheme(1))
+        document = {"format": "faker-data.scheme", "name": "orders", "tables": [], "requiredLocalValues": []}
+        with patch.object(server.api, "request", return_value=document) as request:
+            self.assertEqual({"id": 1, "name": "orders", "kind": "RULES", "tables": [], "requiredLocalValues": [], "view": "REDACTED_NOT_A_BACKUP"}, server.get_scheme(1))
+            request.assert_called_once_with("/scheme/1/export")
+
+    def test_ui_bound_private_values_remain_local_without_a_values_file(self):
+        private = {"id": 1, "name": "orders", "tablesJson": json.dumps([{"name": "orders", "columns": [
+            {"name": "note", "regs": [{"code": "RES.INPUTAREA", "inputs": [{"value": "UI_PRIVATE_MARKER"}]}]}]}])}
+        tables = json.loads(private["tablesJson"])
+        tables[0]["columns"][0]["regs"][0]["inputs"][0]["value"] = None
+        document = {"format": "faker-data.scheme", "name": "orders", "tables": tables,
+                    "requiredLocalValues": [{"pointer": "/tables/0/columns/0/regs/0/inputs/0/value", "reason": "PRIVATE_BINDING"}]}
+        client = server.JavaAPI("http://127.0.0.1:8085", None)
+        with patch.object(server, "api", client), patch.object(client, "request", side_effect=lambda path: document if path.endswith("/export") else private):
+            view = server.get_scheme(1)
+        self.assertNotIn("UI_PRIVATE_MARKER", json.dumps(view))
+        self.assertIsNone(view["tables"][0]["columns"][0]["regs"][0]["inputs"][0]["value"])
+        self.assertTrue(view["requiredLocalValues"])
 
     def test_errors_redact_profile_url_and_password(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -38,6 +156,13 @@ class AdapterTest(unittest.TestCase):
     def test_invalid_task_id_cannot_change_request_path(self):
         with self.assertRaises(server.ToolError):
             server.get_task("../scheme/1")
+
+    def test_batch_reads_are_bounded_and_cannot_escape_paths(self):
+        with patch.object(server.api, "request") as request:
+            for batch,limit in [("../scheme",100),("valid-id",201)]:
+                with self.assertRaises(server.ToolError):
+                    server.get_batch(batch, include_rows=True, limit=limit)
+            request.assert_not_called()
 
     def test_timed_out_write_is_not_retried(self):
         client = server.JavaAPI("http://127.0.0.1:8085", None)

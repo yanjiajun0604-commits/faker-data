@@ -32,7 +32,7 @@ public class LocalStorageConfig {
         if(!schemeColumns.contains("scheme_kind"))jdbc.execute("ALTER TABLE faker_scheme ADD COLUMN scheme_kind TEXT NOT NULL DEFAULT 'RULES'");
         if(!schemeColumns.contains("extension_json"))jdbc.execute("ALTER TABLE faker_scheme ADD COLUMN extension_json TEXT");
         jdbc.execute("CREATE TABLE IF NOT EXISTS faker_task(id TEXT PRIMARY KEY,type TEXT NOT NULL,state TEXT NOT NULL,progress REAL NOT NULL,result TEXT,error_msg TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)");
-        jdbc.update("UPDATE faker_task SET state='ERROR',error_msg='上次运行中断，请核对目标数据后重新提交',result='运行中断',updated_at=? WHERE state IN ('WAITING','PROCESSING','CANCELING')",System.currentTimeMillis());
+        jdbc.update("UPDATE faker_task SET state='ERROR',error_msg='上次运行中断，请先核对批次和原请求，勿盲目重新提交',result='运行中断',updated_at=? WHERE state IN ('WAITING','PROCESSING','CANCELING')",System.currentTimeMillis());
         return ds;
     }
     @PreDestroy public void close() throws IOException {

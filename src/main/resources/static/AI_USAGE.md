@@ -34,6 +34,8 @@ java -jar faker-data-0.1.1.jar
 
 生成任务提交成功只表示已受理，不表示数据已写入。必须继续查同一个任务 ID，直到明确终态。
 
+当前源码也提供[内置只读数据库调查](docs/database-inspection.md)：`POST /db/inspect` 发现表或读取结构，`POST /db/readRows` 读取有限样本。MCP 对应 `list_tables`、`describe_table`、`read_rows`，无需另外安装 dbquery。以下旧元数据接口仍然保留。此能力要求新源码构建的服务，旧发行包不包含。
+
 ## 3. 第一步：检查目标连接
 
 使用同一个数据源对象调用元数据接口和生成接口：
@@ -234,8 +236,8 @@ python examples/ai_client.py --request examples/generate-demo.json
 确认请求内容符合用户本次任务后，仅提交一次：
 
 ```powershell
-python examples/ai_client.py --request examples/generate-demo.json --submit --timeout 300
-python examples/ai_client.py --request examples/generate-tree.json --submit --timeout 300
+python examples/ai_client.py --request examples/generate-demo.json --submit --request-id example-demo-run-001 --timeout 300
+python examples/ai_client.py --request examples/generate-tree.json --submit --request-id example-tree-run-001 --timeout 300
 ```
 
 端口改变时追加 `--base-url http://127.0.0.1:8095`。客户端会输出任务 ID 和终态，业务失败和等待超时以非零退出；它不会自动重提任务。示例 JSON 需要按真实元数据调整；自动化调用优先读取元数据后合并 `regs`，不要在程序里固定 JDBC 类型。
@@ -271,3 +273,5 @@ print(client.wait(task_id, timeout=300))
 ## 10. 复杂字段的本地高级扩展
 
 当前源码在原有 `GEN_DATA` 中支持可选的 `EXT.FIELD` 字段规则，默认关闭。每个普通字段继续使用现有规则，只有无法表达的字段才由可信本地代码根据本次普通生成值返回字段结果。扩展不能返回整表、增加记录或覆盖普通字段。安装、协议、调用和验收边界见[字段级本地扩展](docs/local-extensions.md)。方案沿用“使用”入口；没有状态分组引擎；可通过独立的 [stdio MCP 适配器](docs/mcp.md) 接入，也不保证未知二进制格式能自动还原。
+
+当前源码支持[请求幂等与未知结果恢复](docs/request-recovery.md)。在生成 JSON 顶层传入并保留 requestId；无 requestId 的旧 HTTP 请求每次都创建新任务。

@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Public Flowable approval example</title>
+<style>
+body{font:16px system-ui,sans-serif;max-width:1100px;margin:36px auto;padding:0 20px;color:#243a31;background:#f8faf9}button,select{font:inherit;padding:8px 12px;margin:4px;border:1px solid #b6c9bf;border-radius:6px;background:white}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}table{border-collapse:collapse;width:100%;background:white}td,th{text-align:left;padding:12px;border-bottom:1px solid #dce5df}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:16px}small{display:block;color:#58695f}#message{min-height:24px;color:#a52b20}.id{font:12px monospace;overflow-wrap:anywhere;max-width:230px}
+</style>
+<h1>Public Flowable approval</h1>
+<p>Real engine acceptance for ordinary faker-data rules and one serialized field extension.</p>
+<label>Local demo role <select id="actor"><option>owner</option><option>reviewer</option><option>auditor</option></select></label>
+<small>Role selection simulates actors on this loopback test page; it is not login or production authentication.</small>
+<p id="tabs"><button data-state="SAVED">Saved</button><button data-state="SUBMITTED">Submitted</button><button data-state="APPROVED">Approved</button><button id="refresh">Refresh</button></p>
+<div id="message" role="status"></div><h2 id="heading">Saved</h2>
+<style>.workspace{display:grid;grid-template-columns:3fr 2fr;gap:20px}.list{max-height:440px;overflow:auto}#detail{margin:0;max-height:400px;overflow:auto;font-size:13px}@media(max-width:850px){.workspace{display:block}.list{max-height:350px}}</style>
+<div class="workspace"><div class="list"><table><thead><tr><th>Document</th><th>Amount</th><th>Current assignee</th><th>Actions</th></tr></thead><tbody id="rows"></tbody></table></div>
+<section><h2>Details and decoded engine variable</h2><pre id="detail">Choose View.</pre></section></div>
+<script>
+let state='SAVED';const actor=document.getElementById('actor'),rows=document.getElementById('rows'),message=document.getElementById('message');
+async function api(path,action){const response=await fetch(path,action?{method:'POST',headers:{'X-Demo-Action':'1'}}:{});const value=await response.json();if(!response.ok)throw new Error(value.error);return value;}
+async function act(id,action){message.textContent='';try{const value=await api('/api/documents/'+id+'/'+action+'?actor='+encodeURIComponent(actor.value),true);document.getElementById('detail').textContent=JSON.stringify(value,null,2);await load();}catch(error){message.textContent=error.message;}}
+async function load(){message.textContent='';try{const data=await api('/api/documents?state='+state);rows.replaceChildren();document.getElementById('heading').textContent=state+' — '+data.length+' documents';for(const d of data){const tr=document.createElement('tr');for(const value of [d.ID,d.AMOUNT,d.currentAssignee||'—']){const td=document.createElement('td');td.textContent=value;if(value===d.ID)td.className='id';tr.append(td);}const actions=document.createElement('td');const view=document.createElement('button');view.textContent='View';view.onclick=async()=>{try{document.getElementById('detail').textContent=JSON.stringify(await api('/api/documents/'+d.ID),null,2);}catch(e){message.textContent=e.message;}};actions.append(view);if(state==='SAVED'){const submit=document.createElement('button');submit.textContent='Submit';submit.disabled=actor.value!==d.OWNER;submit.onclick=()=>act(d.ID,'submit');actions.append(submit);}if(state==='SUBMITTED'){const approve=document.createElement('button');approve.textContent='Approve';approve.disabled=actor.value!==d.currentAssignee;approve.onclick=()=>act(d.ID,'approve');actions.append(approve);}tr.append(actions);rows.append(tr);}}catch(error){message.textContent=error.message;}}
+document.querySelectorAll('[data-state]').forEach(button=>button.onclick=()=>{state=button.dataset.state;load();});actor.onchange=load;document.getElementById('refresh').onclick=load;load();
+</script></html>

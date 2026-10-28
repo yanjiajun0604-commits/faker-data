@@ -1,5 +1,8 @@
 # AI agent integration guide — faker-data
 
+Current source includes [bounded read-only inspection](docs/database-inspection.en.md): `POST /db/inspect` for tables/metadata and `POST /db/readRows` for samples. MCP exposes `list_tables`, `describe_table`, `read_rows`; a separate database MCP is optional. Older release JARs do not include these endpoints.
+
+
 > **Access URL:** this guide targets v0.1.1 and current source builds at `http://127.0.0.1:8085`. Older v0.1.0 JARs retain `http://127.0.0.1:8085/faker`; set the client's base URL explicitly when calling that older build. See [access URLs and version compatibility](docs/access-url.md).
 
 Workflow: **person → local AI agent → HTTP API → target test database**. There is no built-in LLM; the agent supplies reasoning and translates the user's authorized request into field rules.
@@ -67,7 +70,7 @@ python examples/ai_client.py --request examples/generate-demo.json
 When authorized, submit once:
 
 ```sh
-python examples/ai_client.py --request examples/generate-demo.json --submit --timeout 300
+python examples/ai_client.py --request examples/generate-demo.json --submit --request-id example-demo-run-001 --timeout 300
 ```
 
 Use `--base-url http://127.0.0.1:8095` for another port. The client prints the task ID, then the terminal result. A timeout is not proof of failure: continue querying that ID, do not submit a duplicate task. A POST timeout without a received UUID is ambiguous and requires checking task records/target data before any retry.
@@ -85,3 +88,5 @@ Report task ID, final state, requested scope, and any actual row-count/reference
 ## Complex fields: local advanced extensions
 
 Current source supports an optional `EXT.FIELD` rule inside ordinary `GEN_DATA`, disabled by default. Ordinary fields use existing rules; only unsupported fields invoke trusted local code using the generated context. Extensions cannot return tables, add records or overwrite ordinary fields. See [local field extensions](docs/local-extensions.en.md). Saved schemes retain the Use flow. There is no state-group engine. A separate [stdio MCP adapter](docs/mcp.en.md) connects AI clients; unknown binary formats are not automatically decoded.
+
+Current source supports [stable request IDs and unknown-result recovery](docs/request-recovery.en.md). Retain a top-level requestId in generation JSON; legacy no-key HTTP calls create a new task each time.

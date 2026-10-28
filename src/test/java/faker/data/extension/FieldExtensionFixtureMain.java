@@ -10,6 +10,7 @@ public class FieldExtensionFixtureMain {
         Path job=Paths.get(args[1]).getParent();ArrayNode values=mapper.createArrayNode();
         for(JsonNode field:input.path("fields")) {
             JsonNode row=input.path("tables").path("children").get(field.path("rowIndex").asInt());
+            if("virtual-inline".equals(args[2]) && (!row.hasNonNull("logical_parent") || !row.path("logical_parent").asText().equals(row.path("parent_id").asText())))throw new IllegalArgumentException("Virtual marker missing or inconsistent");
             byte[] binary="large-inline".equals(args[2])?new byte[1048577]:row.path("parent_id").asText().getBytes(StandardCharsets.UTF_8);
             String name="payload-"+field.path("rowIndex").asInt()+".bin";
             boolean inline=args[2].contains("inline") || "invalid-base64".equals(args[2]);

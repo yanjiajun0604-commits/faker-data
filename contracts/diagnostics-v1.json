@@ -1,0 +1,31 @@
+{
+  "format": "faker-data.diagnostics",
+  "formatVersion": 1,
+  "scope": "Known stable examples; additional uppercase diagnostic codes can be returned",
+  "fields": [
+    "code",
+    "table",
+    "column",
+    "rulePath",
+    "ruleCode",
+    "rowIndex",
+    "hint"
+  ],
+  "rowIndex": "zero based, present only when known",
+  "codes": [
+    "INVALID_RULE_ARGUMENTS",
+    "INVALID_RULE_DEPENDENCY",
+    "RULE_EXECUTION_FAILED",
+    "JDBC_VALUE_BIND_FAILED",
+    "REF_MATCH_NONE",
+    "REF_MATCH_MULTIPLE",
+    "PREVIEW_EXPRESSION_UNSUPPORTED",
+    "PREVIEW_RULE_UNSUPPORTED",
+    "SCHEME_FORMAT_UNSUPPORTED",
+    "SCHEME_VERSION_UNSUPPORTED",
+    "SCHEME_VALUES_REQUIRED",
+    "SCHEME_TRUST_CONFIRMATION_REQUIRED",
+    "SCHEME_NAME_CONFLICT",
+    "IDEMPOTENCY_CONFLICT"
+  ]
+}

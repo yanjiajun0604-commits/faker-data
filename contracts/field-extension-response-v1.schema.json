@@ -1,0 +1,106 @@
+{
+  "type": "object",
+  "properties": {
+    "values": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "rowIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "column": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "$timestampMillis": {
+                    "type": "integer",
+                    "minimum": -9223372036854775808,
+                    "maximum": 9223372036854775807
+                  }
+                },
+                "required": [
+                  "$timestampMillis"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "$base64": {
+                    "type": "string",
+                    "maxLength": 1398104
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[A-Fa-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "$base64",
+                  "sha256"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "$binary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[A-Fa-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "$binary",
+                  "sha256"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": [
+          "table",
+          "rowIndex",
+          "column",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 100000
+    }
+  },
+  "required": [
+    "values"
+  ],
+  "additionalProperties": false,
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:faker-data:field-extension-response:1",
+  "description": "Only requested table/row/column identities may be returned. Hash/allowlist/path/binary-size/output/context limits are additionally enforced by the Java runtime; schemas do not execute or sandbox code."
+}

@@ -18,6 +18,9 @@ public class TableVO {
 
     private ParentRowsConfig parentRows;
 
+    /** 可选：事先声明允许变化的列及后续业务派生记录，供按批次核查清理。 */
+    private OwnershipConfig ownership;
+
     /** 树形结构配置。非 null 时表示该表为树形结构表，使用 BFS 拓扑引擎生成。 */
     private TreeConfig treeConfig;
 }

@@ -23,32 +23,45 @@ public final class GenerationValidator {
                 if(!columns.add(column.getName().toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("Duplicate column: "+column.getName());
                 if(column.getJavaType()==null || column.getJavaType().trim().isEmpty())throw new IllegalArgumentException("Column requires javaType: "+column.getName());
             }
+            long virtual=table.getColumns().stream().filter(ColumnInfo::isVirtual).count();
+            if(virtual>50)throw new IllegalArgumentException("VIRTUAL_FIELD_LIMIT: "+table.getName());
+            if(virtual>0 && table.getExistingData()!=null)throw new IllegalArgumentException("VIRTUAL_EXISTING_SOURCE_UNSUPPORTED: "+table.getName());
+            if(virtual==table.getColumns().size())throw new IllegalArgumentException("PHYSICAL_COLUMN_REQUIRED: "+table.getName());
         }
+        OwnershipConfiguration.validate(tables);
     }
     private static void identifier(String name,boolean qualified) {
         String part="[\\p{L}_][\\p{L}\\p{N}_]*";
         if(name==null || !name.matches(qualified?part+"(?:\\."+part+")*":part))throw new IllegalArgumentException("Invalid SQL identifier");
     }
     public static Map<String,Object> validate(List<TableVO> tables) {
+        return validate(tables,false,false);
+    }
+    public static Map<String,Object> validateForPreview(List<TableVO> tables){return validate(tables,true,false);}
+    public static Map<String,Object> validatePortable(List<TableVO> tables){return validate(tables,false,true);}
+    public static boolean requiresTrustedCode(List<TableVO> tables){for(TableVO table:tables){if(table.getParentRows()!=null && table.getParentRows().getCondition()!=null)try{PreviewSafety.expression(table.getParentRows().getCondition());}catch(RuntimeException unsupported){return true;}for(ColumnInfo column:table.getColumns())if(requiresTrustedCodeRules(column.getRegs()))return true;}return false;}
+    private static boolean requiresTrustedCodeRules(List<faker.data.service.generate.MetaTypeVO> rules){if(rules==null)return false;for(faker.data.service.generate.MetaTypeVO rule:rules)if(PreviewSafety.requiresTrustedCode(rule) || requiresTrustedCodeRules(rule.getOnTrue()) || requiresTrustedCodeRules(rule.getOnFalse()))return true;return false;}
+    private static Map<String,Object> validate(List<TableVO> tables,boolean preview,boolean portable) {
         structure(tables);
         List<TableVO> ordered=new GenerationPlanner().plan(tables);
         List<Map<String,Object>> summary=new ArrayList<>();
         int fields=0;boolean extensions=false;
         for(TableVO table:ordered) {
-            TableGenerationPlan plan=new TableGenerationPlan(table);
+            TableGenerationPlan plan=new TableGenerationPlan(table,false,preview,portable);
             if(table.getExistingData()!=null)new ExistingDataLoader(table);
             if(table.getParentRows()!=null) {
                 TableVO parent=ordered.stream().filter(t->t.getName().equalsIgnoreCase(table.getParentRows().getTable())).findFirst().get();
-                new ParentRowsSelector(parent,table.getParentRows());
+                new ParentRowsSelector(parent,table.getParentRows(),preview,portable);
             }
-            if(table.getTreeConfig()!=null)new faker.data.service.generate.tree.TreeTopologyEngine(0L).count(table.getTreeConfig());
+            if(table.getTreeConfig()!=null && !portable)new faker.data.service.generate.tree.TreeTopologyEngine(0L).count(table.getTreeConfig(),preview?1000:Integer.MAX_VALUE);
+            if(table.getTreeConfig()!=null && portable){TreeConfig tree=table.getTreeConfig();if(tree.getNodeField()==null || table.getColumns().stream().noneMatch(c->c.getName().equalsIgnoreCase(tree.getNodeField())) || tree.getMaxDepth()<1 || tree.getMinRoots()<0 || tree.getMaxRoots()<tree.getMinRoots() || tree.getMinChildrenPerNode()<0 || tree.getMaxChildrenPerNode()<tree.getMinChildrenPerNode())throw GenerationProblem.at(new IllegalArgumentException("Invalid portable tree parameters"),table.getName(),null,"treeConfig",null,null,"INVALID_TREE_CONFIG");}
             Map<String,Object> item=new LinkedHashMap<>();item.put("table",table.getName());
             item.put("mode",table.getExistingData()!=null?"READ_EXISTING":"GENERATE");
             item.put("requestedRows",table.getParentRows()!=null || table.getExistingData()!=null || table.getTreeConfig()!=null?null:table.getSize());
-            item.put("columns",table.getColumns().size());item.put("fieldExtensions",plan.hasFieldExtensions);summary.add(item);
+            item.put("columns",table.getColumns().size());item.put("virtualColumns",table.getColumns().stream().filter(ColumnInfo::isVirtual).count());item.put("fieldExtensions",plan.hasFieldExtensions);summary.add(item);
             fields+=table.getColumns().size();extensions|=plan.hasFieldExtensions;
         }
-        Map<String,Object> result=new LinkedHashMap<>();result.put("valid",true);result.put("scope","CONFIGURATION_ONLY");
+        Map<String,Object> result=new LinkedHashMap<>();result.put("valid",true);result.put("scope",portable?"PORTABLE_CONFIGURATION_ONLY":"CONFIGURATION_ONLY");
         result.put("tables",summary);result.put("columnCount",fields);result.put("usesFieldExtensions",extensions);
         result.put("notChecked",Arrays.asList("Database connectivity, schema, constraints and existing candidates","Extension installation and execution","Business workflow validity"));
         return result;

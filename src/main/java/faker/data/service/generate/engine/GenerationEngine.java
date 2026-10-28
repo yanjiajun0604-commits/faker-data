@@ -5,12 +5,17 @@ import faker.data.domain.TableVO;
 import faker.data.service.generate.tree.*;
 import faker.data.task.*;
 import faker.data.extension.FieldExtensionService;
+import faker.data.batch.GenerationBatchStore;
+import faker.data.batch.GenerationBatchRecorder;
 import org.springframework.beans.factory.annotation.Autowired;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.jdbc.core.ConnectionCallback;
 import javax.sql.DataSource;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -21,8 +26,10 @@ import java.util.concurrent.ThreadLocalRandom;
 public class GenerationEngine {
     private final ReferenceCache cache;
     private final FieldExtensionService fields;
-    public GenerationEngine(ReferenceCache cache) { this(cache,null); }
-    @Autowired public GenerationEngine(ReferenceCache cache,FieldExtensionService fields) { this.cache=cache;this.fields=fields; }
+    private final GenerationBatchStore batches;
+    public GenerationEngine(ReferenceCache cache) { this(cache,null,null); }
+    public GenerationEngine(ReferenceCache cache,FieldExtensionService fields) { this(cache,fields,null); }
+    @Autowired public GenerationEngine(ReferenceCache cache,FieldExtensionService fields,GenerationBatchStore batches) { this.cache=cache;this.fields=fields;this.batches=batches; }
 
     public void generate(DataSource target, List<TableVO> tables, AsyncTaskMonitor monitor, AsyncTaskExecutor executor) {
         GenerationValidator.structure(tables);
@@ -44,6 +51,7 @@ public class GenerationEngine {
         }
         JdbcTemplate jdbc=new JdbcTemplate(target);
         TransactionTemplate transaction=new TransactionTemplate(new DataSourceTransactionManager(target));
+        if(OwnershipConfiguration.enabled(tables))transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_SERIALIZABLE);
         Map<String,List<String>> rowIds=new HashMap<>();
         Map<TableGenerationPlan,ExistingDataLoader> existing=new IdentityHashMap<>();
         Map<TableGenerationPlan,ParentRowsSelector> selectors=new IdentityHashMap<>();
@@ -53,6 +61,14 @@ public class GenerationEngine {
             selectors.put(plan,new ParentRowsSelector(parent,plan.table.getParentRows()));
         }
         transaction.executeWithoutResult(status -> {
+            if(batches!=null) {
+                List<TableVO> orderedTables=new ArrayList<>();for(TableGenerationPlan plan:plans)orderedTables.add(plan.table);
+                jdbc.execute((ConnectionCallback<Void>)connection->{batches.begin(task,connection,orderedTables);return null;});
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){
+                    @Override public void afterCompletion(int completion){batches.complete(task,completion);}
+                });
+                jdbc.execute((ConnectionCallback<Void>)connection->{batches.captureOwnership(task,connection,orderedTables);return null;});
+            }
             Map<String,List<Map<String,Object>>> generated=new LinkedHashMap<>();
             long cells=0;
             long bufferedBytes=0;
@@ -109,7 +125,7 @@ public class GenerationEngine {
                     }
                     generated.put(plan.table.getName(),records);
                 } else {
-                    plan.writer.write(jdbc,plan.table.getSize(),source,count->progress(monitor,executor,before+count,denominator));
+                    plan.writer.write(jdbc,plan.table.getSize(),source,count->progress(monitor,executor,before+count,denominator),batches==null?null:new GenerationBatchRecorder(batches,task,plan.table.getName()));
                 }
                 completed+=plan.table.getSize();
                 log.info("{} 表数据生成完毕, 共 {} 条",plan.table.getName(),plan.table.getSize());
@@ -122,11 +138,13 @@ public class GenerationEngine {
                         Object[] values=new Object[plan.table.getColumns().size()];
                         for(int c=0;c<values.length;c++)values[c]=records.get(index).get(plan.table.getColumns().get(c).getName());
                         return values;
-                    },count->{});
+                    },count->{},batches==null?null:new GenerationBatchRecorder(batches,task,plan.table.getName()));
                 }
             }
             status.flush();
+            if(batches!=null)jdbc.execute((ConnectionCallback<Void>)connection->{batches.prepare(task,connection);return null;});
         });
+        if(batches!=null)batches.requireCommitted(task);
         if(fields!=null) {
             List<Map<String,Object>> audit=new ArrayList<>();
             for(TableGenerationPlan plan:plans)if(!existing.containsKey(plan)) {

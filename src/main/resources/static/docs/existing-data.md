@@ -92,7 +92,7 @@
 
 ```sh
 python examples/ai_client.py --request examples/generate-existing-data.json
-python examples/ai_client.py --request examples/generate-existing-data.json --submit --timeout 300
+python examples/ai_client.py --request examples/generate-existing-data.json --submit --request-id example-existing-data-run-001 --timeout 300
 ```
 
 按 [AI 指南](../AI_USAGE.md) 配置连接、提供本地密码、授权写入并查询原任务。集成测试在临时 H2 数据库验证了上述 JSON、字段一致性、快照复用、容量拒绝、空结果、参数绑定、父行筛选和事务回滚。MySQL、Oracle、达梦的真实数据库兼容和业务验收仍需独立验证。
