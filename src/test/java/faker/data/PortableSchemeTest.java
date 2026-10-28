@@ -17,7 +17,58 @@ class PortableSchemeTest {
     static final Path DIR=GenerationBatchTest.directory();
     @Autowired TestRestTemplate http;
     @Autowired JdbcTemplate ledger;
+    @SuppressWarnings("unchecked") @Test void legacyUnverifiedBindingsRequireExplicitReimport() {
+        String name="Legacy-binding-"+UUID.randomUUID();Map imported=http.postForObject("/scheme/import",importing(exported(),name,true),Map.class);Object id=((Map)imported.get("data")).get("schemeId");
+        ledger.update("UPDATE faker_scheme_private_path SET value_hash=NULL WHERE scheme_id=?",id);
+        Map response=http.getForObject("/scheme/"+id+"/export",Map.class);assertNotEquals(0,response.get("code"));assertEquals("SCHEME_PRIVATE_BINDING_LOCATION_CHANGED",response.get("msg"));
+        Map raw=(Map)http.getForObject("/scheme/"+id,Map.class).get("data");Map saved=http.postForObject("/scheme/save",m("name",name,"dataSource",source("local-password"),"tables",com.alibaba.fastjson.JSON.parseArray((String)raw.get("tablesJson"))),Map.class);assertNotEquals(0,saved.get("code"));
+        Map explicit=importing(exported(),name,true);explicit.put("replaceExisting",true);assertEquals(0,http.postForObject("/scheme/import",explicit,Map.class).get("code"));
+        Map again=http.getForObject("/scheme/"+id+"/export",Map.class);assertEquals(0,again.get("code"));assertFalse(again.toString().contains("bound-note-secret"));
+    }
+    @SuppressWarnings("unchecked") @Test void exportRejectsStaleBindingWrittenByAnOlderClient() {
+        Map imported=http.postForObject("/scheme/import",importing(exported(),"Legacy-stale-"+UUID.randomUUID(),true),Map.class);Object id=((Map)imported.get("data")).get("schemeId");
+        Map raw=(Map)http.getForObject("/scheme/"+id,Map.class).get("data");List<Map> tables=com.alibaba.fastjson.JSON.parseObject((String)raw.get("tablesJson"),new com.alibaba.fastjson.TypeReference<List<Map>>(){});
+        Collections.swap((List)tables.get(0).get("columns"),0,3);
+        ledger.update("UPDATE faker_scheme SET tables_json=? WHERE id=?",com.alibaba.fastjson.JSON.toJSONString(tables),id);
+        Map response=http.getForObject("/scheme/"+id+"/export",Map.class);assertNotEquals(0,response.get("code"),response.toString());
+        assertEquals("SCHEME_PRIVATE_BINDING_LOCATION_CHANGED",response.get("msg"));
+    }
+    @SuppressWarnings("unchecked") @Test void importingPreservesExplicitNullSourcePredicates() {
+        String pointer="/tables/0/existingData/where/optional",name="Null-source-"+UUID.randomUUID();Map lookup=table("nullable_lookup",0,col("id","java.lang.String"));lookup.put("existingData",m("where",m("optional",null),"maxRows",10));
+        Map document=m("format","faker-data.scheme","formatVersion",1,"name",name,"connectionRef","local","tables",Arrays.asList(lookup),"requiredLocalValues",Arrays.asList(m("pointer",pointer,"reason","LOCAL_SOURCE_SELECTOR")),"requiredExtensions",Collections.emptyList(),"trustedCodeRequired",false);
+        Map response=http.postForObject("/scheme/import",m("document",document,"dataSource",source("local-password"),"replacements",m(pointer,null)),Map.class);assertEquals(0,response.get("code"),response.toString());Object id=((Map)response.get("data")).get("schemeId");
+        Map raw=(Map)http.getForObject("/scheme/"+id,Map.class).get("data");List<Map> tables=com.alibaba.fastjson.JSON.parseObject((String)raw.get("tablesJson"),new com.alibaba.fastjson.TypeReference<List<Map>>(){});Map where=(Map)((Map)tables.get(0).get("existingData")).get("where");
+        assertTrue(where.containsKey("optional"),raw.toString());assertNull(where.get("optional"));
+    }
+    @SuppressWarnings("unchecked") @Test void ordinarySaveRebasesPrivateBindingsAfterUiTableAndColumnSort() {
+        Map first=table("first_rows",1,fixed("note","java.lang.String",null),col("id","java.lang.String",m("code","FIX.UUID")));
+        Map second=table("second_rows",1,col("id","java.lang.String",m("code","FIX.UUID")));
+        String pointer="/tables/0/columns/0/regs/0/inputs/0/value",name="UI-sort-"+UUID.randomUUID();
+        Map document=m("format","faker-data.scheme","formatVersion",1,"name",name,"connectionRef","local","tables",Arrays.asList(first,second),"requiredLocalValues",Arrays.asList(m("pointer",pointer,"reason","PRIVATE_BINDING")),"requiredExtensions",Collections.emptyList(),"trustedCodeRequired",false);
+        Map imported=http.postForObject("/scheme/import",m("document",document,"dataSource",source("unrelated-password"),"replacements",m(pointer,"local-bound-note-49")),Map.class);assertEquals(0,imported.get("code"),imported.toString());
+        Object id=((Map)imported.get("data")).get("schemeId");Map stored=(Map)http.getForObject("/scheme/"+id,Map.class).get("data");List<Map> tables=com.alibaba.fastjson.JSON.parseObject((String)stored.get("tablesJson"),new com.alibaba.fastjson.TypeReference<List<Map>>(){});
+        Collections.reverse((List)tables.get(0).get("columns"));Collections.reverse(tables);
+        Map saved=http.postForObject("/scheme/save",m("name",name,"dataSource",source("unrelated-password"),"tables",tables),Map.class);assertEquals(0,saved.get("code"),saved.toString());
+        Map exported=http.getForObject("/scheme/"+id+"/export",Map.class);assertEquals(0,exported.get("code"),exported.toString());assertFalse(exported.toString().contains("local-bound-note-49"),exported.toString());
+        assertEquals("/tables/1/columns/1/regs/0/inputs/0/value",((Map)((List)((Map)exported.get("data")).get("requiredLocalValues")).get(0)).get("pointer"));
+    }
     @org.springframework.boot.test.mock.mockito.SpyBean faker.data.scheme.FakerSchemeService schemeService;
+    @SuppressWarnings("unchecked") @Test void movedInputWithinPrivateFieldKeepsWholeRuleBlockPrivate() {
+        Map document=exported();String name="Edited-private-"+UUID.randomUUID();Map imported=http.postForObject("/scheme/import",importing(document,name,true),Map.class);assertEquals(0,imported.get("code"));
+        Object id=((Map)imported.get("data")).get("schemeId");Map raw=(Map)http.getForObject("/scheme/"+id,Map.class).get("data");List<Map> tables=com.alibaba.fastjson.JSON.parseObject((String)raw.get("tablesJson"),new com.alibaba.fastjson.TypeReference<List<Map>>(){});
+        Map note=(Map)((List)tables.get(0).get("columns")).get(3);Map rule=(Map)((List)note.get("regs")).get(0);List inputs=(List)rule.get("inputs");inputs.add(0,m("value","public","weight",1));
+        Map saved=http.postForObject("/scheme/save",m("name",name,"dataSource",source("different-connection"),"tables",tables),Map.class);assertEquals(0,saved.get("code"),saved.toString());
+        Map exported=http.getForObject("/scheme/"+id+"/export",Map.class);assertEquals(0,exported.get("code"));assertFalse(exported.toString().contains("bound-note-secret"));
+        assertTrue(((List<Map>)((Map)exported.get("data")).get("requiredLocalValues")).stream().anyMatch(p->"/tables/0/columns/3/regs".equals(p.get("pointer"))));
+    }
+    @SuppressWarnings("unchecked") @Test void removingPrivateColumnFailsWithoutOverwritingAndExplicitImportCanReplaceIt() {
+        Map document=exported();String name="Removed-private-"+UUID.randomUUID();Map imported=http.postForObject("/scheme/import",importing(document,name,true),Map.class);Object id=((Map)imported.get("data")).get("schemeId");
+        Map raw=(Map)http.getForObject("/scheme/"+id,Map.class).get("data");List<Map> tables=com.alibaba.fastjson.JSON.parseObject((String)raw.get("tablesJson"),new com.alibaba.fastjson.TypeReference<List<Map>>(){});
+        ((List)tables.get(0).get("columns")).remove(3);Map saved=http.postForObject("/scheme/save",m("name",name,"dataSource",source("different-connection"),"tables",tables),Map.class);
+        assertNotEquals(0,saved.get("code"));assertEquals("SCHEME_PRIVATE_BINDING_LOCATION_CHANGED",saved.get("msg"));
+        assertEquals(raw.get("tablesJson"),((Map)http.getForObject("/scheme/"+id,Map.class).get("data")).get("tablesJson"));
+        Map explicit=importing(exported(),name,true);explicit.put("replaceExisting",true);Map replaced=http.postForObject("/scheme/import",explicit,Map.class);assertEquals(0,replaced.get("code"),replaced.toString());
+    }
     @DynamicPropertySource static void properties(DynamicPropertyRegistry p){p.add("faker.data-dir",DIR::toString);}
     Map<String,Object> source(String password){return m("type","MYSQL","url","jdbc:mysql://127.0.0.1:1/no-contact?connectTimeout=200&socketTimeout=200","username","private-user","password",password);}
     @SuppressWarnings("unchecked") Map<String,Object> exported() {

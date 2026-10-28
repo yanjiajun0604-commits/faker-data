@@ -26,6 +26,7 @@ const serverPatterns = Object.entries(messages).filter(([key]) => /\{p\d+\}/.tes
 
 function localizeServerMessage(language, message) {
   const text = String(message || '');
+  if (text === 'SCHEME_PRIVATE_BINDING_LOCATION_CHANGED') return translate(language, '私有绑定对应的字段结构已改变，请通过便携导入重新绑定。');
   if (language !== 'en' || !text) return text;
   if (messages[text]) return messages[text];
   for (const { key, names, regex } of serverPatterns) {

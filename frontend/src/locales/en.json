@@ -421,5 +421,8 @@
   "说明": "Details",
   "查看完整诊断与限制": "Full diagnostics and limitations",
   "原引用不在当前已选字段中，请重新选择。": "The original reference is not among the selected fields. Choose it again.",
-  "大整数或非有限数值请改用 JSON 字符串": "Use a JSON string for large integers or non-finite numbers."
+  "大整数或非有限数值请改用 JSON 字符串": "Use a JSON string for large integers or non-finite numbers.",
+  "应用只读模式会清除候选字段的生成规则和写入归属声明。": "Applying read-only mode clears candidate-field generation rules and write-ownership declarations.",
+  "候选字段已不存在，请刷新表结构": "A candidate field no longer exists. Refresh the table metadata.",
+  "私有绑定对应的字段结构已改变，请通过便携导入重新绑定。": "A privately bound field changed structure. Re-import the portable scheme with explicit local bindings."
 }

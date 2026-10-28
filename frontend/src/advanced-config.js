@@ -19,7 +19,7 @@ function rowsToFilters(rows) {
   }
   return result;
 }
-function tableSettings(table, draft) {
+function tableSettings(table, draft, catalogColumns) {
   const result = clone(table);
   result.existingData = null;
   result.parentRows = null;
@@ -27,7 +27,15 @@ function tableSettings(table, draft) {
   if (draft.mode === 'READ_EXISTING') {
     if (result.columns.some(c => c.virtual)) throw new Error('只读候选表不能包含虚拟字段');
     if (!draft.sourceColumns || !draft.sourceColumns.length) throw new Error('请选择至少一个候选字段');
-    result.columns = result.columns.filter(c => draft.sourceColumns.includes(c.name));
+    const catalog = catalogColumns && catalogColumns.length ? catalogColumns : table.columns;
+    result.columns = draft.sourceColumns.map(name => {
+      const column = catalog.find(c => !c.virtual && c.name.toLowerCase() === name.toLowerCase());
+      if (!column) throw new Error('候选字段已不存在，请刷新表结构');
+      const selected = clone(column);
+      selected.regs = [];selected.depended = false;delete selected.reg;
+      return selected;
+    });
+    result.ownership = null;
     result.existingData = { where: rowsToFilters(draft.filters), orderBy: draft.orderBy.split(',').map(s => s.trim()).filter(Boolean), maxRows: draft.maxRows };
   } else if (draft.mode === 'PER_PARENT') {
     if (!draft.parentTable || draft.parentTable === table.name) throw new Error('请选择其他已选表作为父表');

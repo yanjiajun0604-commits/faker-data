@@ -6,6 +6,10 @@ The stdio adapter connects AI clients to the existing Java `GEN_DATA` engine. No
 
 ## Setup
 
+The [public order acceptance package](order-lifecycle.en.md) provides repeatable stdio MCP generation, verification, persistent receipts and explicitly authorized batch cleanup, with an optional binary field extension.
+
+The recommended [unified launcher](launcher.en.md) installs isolated dependencies and generates client configuration: `python faker.py setup --jar /path/current.jar`, then `python faker.py config`. It can own a Java child or explicitly attach to an existing service. Manual steps below remain supported.
+
 Requirements: Java 8+, Python 3.10+, and an AI client supporting stdio MCP. Start the Java JAR separately, then create a Python environment:
 
 ```sh

@@ -426,7 +426,7 @@
     @cancel="handleRuleCancel"
     @tree-config-change="handleTreeConfigChange"
   />
-  <TableOptions :visible.sync="tableOptionsVisible" :table="optionsTable" :tables="selectedTables" @save="applyTableOptions" />
+  <TableOptions :visible.sync="tableOptionsVisible" :table="optionsTable" :tables="selectedTables" :catalog-columns="optionsCatalogColumns" @save="applyTableOptions" />
   <el-dialog :title="inspectionTitle" :visible.sync="inspectionVisible" width="860px" class="advanced-dialog" top="5vh">
     <p>{{ $t('预览不写库，不运行字段扩展；样本不代表完整任务的业务验收。预检只检查可静态判断的约束。') }}</p>
     <div v-if="inspectionData" class="inspection-body">
@@ -513,7 +513,7 @@ export default {
   components: { RuleEditor, TableOptions },
   data() {
     return {
-      tableOptionsVisible: false, optionsTable: null,
+      tableOptionsVisible: false, optionsTable: null, optionsCatalogColumns: [],
       inspectionLoading: false, inspectionVisible: false, inspectionResult: '', inspectionData: null, inspectionKind: 'preview',
       importVisible: false, importDocument: '', importValues: '{}', importTrust: false, importLoading: false,
       //任务进度
@@ -691,7 +691,15 @@ export default {
 
   methods: {
     previewCell(value) { return value===null ? 'NULL' : typeof value==='object' ? JSON.stringify(value) : String(value); },
-    openTableOptions(table) { this.optionsTable=table;this.tableOptionsVisible=true; },
+    async openTableOptions(table) {
+      this.optionsTable=table;this.tableOptionsVisible=false;this.optionsCatalogColumns=[];
+      try {
+        const {data:res}=await this.columnLists(table.name);
+        if(this.optionsTable!==table)return;
+        if(res.code!==0){this.$message.error(responseMessage(res));return;}
+        this.optionsCatalogColumns=res.data || [];this.tableOptionsVisible=true;
+      } catch (_) { /* The shared HTTP interceptor reports network errors once. */ }
+    },
     applyTableOptions(table) { const index=this.selectedTables.findIndex(t=>t.name===table.name);if(index>=0)this.$set(this.selectedTables,index,table); },
     async inspectGeneration(kind) {
       this.inspectionLoading=true;this.inspectionKind=kind;

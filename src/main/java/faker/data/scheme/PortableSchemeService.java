@@ -22,6 +22,7 @@ public class PortableSchemeService {
     public PortableSchemeService(FakerSchemeService schemes,FakerSchemeRepository repository,JdbcTemplate jdbc,ObjectMapper json){
         this.schemes=schemes;this.repository=repository;this.jdbc=jdbc;this.json=json;shape=new PortableShape(json);local=new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));snapshot=new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));snapshot.setReadOnly(true);
         jdbc.execute("CREATE TABLE IF NOT EXISTS faker_scheme_private_path(scheme_id INTEGER NOT NULL,pointer TEXT NOT NULL,PRIMARY KEY(scheme_id,pointer))");
+        if(!jdbc.query("PRAGMA table_info(faker_scheme_private_path)",(rs,n)->rs.getString("name")).contains("value_hash"))jdbc.execute("ALTER TABLE faker_scheme_private_path ADD COLUMN value_hash TEXT");
     }
     public JsonNode exportScheme(long id,String connectionRef){
         return snapshot.execute(status->exportSnapshot(id,connectionRef));
@@ -35,8 +36,10 @@ public class PortableSchemeService {
         Set<String> extensions=new TreeSet<>();collectExtensions(tables,extensions);for(String extension:extensions)((ArrayNode)document.get("requiredExtensions")).add(extension);
         List<String> secrets=new ArrayList<>();JsonNode source=parse(scheme.getDataSourceJson());for(String key:Arrays.asList("url","password","username"))if(source.path(key).isTextual() && !source.path(key).asText().isEmpty())secrets.add(source.path(key).asText());
         if(privateText(scheme.getName(),secrets))throw new IllegalArgumentException("SCHEME_PRIVATE_NAME_REQUIRES_RENAME");
+        Map<String,String> bindings=new LinkedHashMap<>();jdbc.query("SELECT pointer,value_hash FROM faker_scheme_private_path WHERE scheme_id=? ORDER BY pointer",rs->{bindings.put(rs.getString("pointer"),rs.getString("value_hash"));},id);
+        PrivateBindingPaths.requireCurrent(scheme.getTablesJson(),bindings);
         Map<String,String> redactions=new LinkedHashMap<>();
-        for(String pointer:jdbc.queryForList("SELECT pointer FROM faker_scheme_private_path WHERE scheme_id=? ORDER BY pointer",String.class,id))if(!document.at(pointer).isMissingNode())redact(document,pointer,"PRIVATE_BINDING",redactions);
+        for(String pointer:bindings.keySet())redact(document,pointer,"PRIVATE_BINDING",redactions);
         scanTables(document,secrets,redactions);
         ArrayNode required=(ArrayNode)document.get("requiredLocalValues");redactions.forEach((pointer,reason)->required.addObject().put("pointer",pointer).put("reason",reason));
         shape.validate(document);bounded(document);return document;
@@ -54,10 +57,11 @@ public class PortableSchemeService {
         boolean trusted=GenerationValidator.requiresTrustedCode(tables);if(trusted && !request.isConfirmTrustedCode())throw new IllegalArgumentException("SCHEME_TRUST_CONFIRMATION_REQUIRED");
         try{JdbcServiceFactory.getJdbcService(request.getDataSource());}catch(IllegalArgumentException|IllegalStateException invalid){throw new IllegalArgumentException("SCHEME_LOCAL_CONNECTION_INVALID");}
         String name=request.getName()==null?document.path("name").asText():request.getName();if(name==null || name.trim().isEmpty() || name.trim().length()>200)throw new IllegalArgumentException("SCHEME_NAME_INVALID");String chosen=name.trim();
-        String source=JSON.toJSONString(request.getDataSource()),tableJson=JSON.toJSONString(tables);
+        String source=JSON.toJSONString(request.getDataSource()),tableJson=JSON.toJSONString(tables,com.alibaba.fastjson.serializer.SerializerFeature.WriteMapNullValue);
         FakerScheme saved=local.execute(status->{
-            FakerScheme result=request.isReplaceExisting()?repository.upsert(chosen,source,tableJson):repository.insertNew(chosen,source,tableJson);
-            jdbc.update("DELETE FROM faker_scheme_private_path WHERE scheme_id=?",result.getId());List<Object[]> paths=new ArrayList<>();for(String pointer:required)paths.add(new Object[]{result.getId(),pointer});if(!paths.isEmpty())jdbc.batchUpdate("INSERT INTO faker_scheme_private_path(scheme_id,pointer) VALUES(?,?)",paths);return result;
+            FakerScheme result=request.isReplaceExisting()?repository.replaceImported(chosen,source,tableJson):repository.insertNew(chosen,source,tableJson);
+            Map<String,String> hashes=PrivateBindingPaths.fingerprints(tableJson,required);
+            jdbc.update("DELETE FROM faker_scheme_private_path WHERE scheme_id=?",result.getId());List<Object[]> paths=new ArrayList<>();for(String pointer:required)paths.add(new Object[]{result.getId(),pointer,hashes.get(pointer)});if(!paths.isEmpty())jdbc.batchUpdate("INSERT INTO faker_scheme_private_path(scheme_id,pointer,value_hash) VALUES(?,?,?)",paths);return result;
         });
         Map<String,Object> result=new LinkedHashMap<>();result.put("schemeId",saved.getId());result.put("name",saved.getName());result.put("formatVersion",1);result.put("connectionRef",document.get("connectionRef").asText());result.put("trustedCodeRequired",trusted);result.put("boundValueCount",required.size());result.put("generated",false);return result;
     }

@@ -10,13 +10,22 @@ test('source selectors preserve scalar types, explicit null and reject duplicate
   assert.throws(()=>config.scalar('1e400'));
   assert.equal(config.scalar('"9007199254740993"'),'9007199254740993');
 });
-test('switching source modes keeps column rules and unrelated advanced settings without mutating the table',()=>{
+test('switching to a read-only source removes write-only rules and ownership without mutating the table',()=>{
   const table={name:'rows',columns:[{name:'id',regs:[{code:'FIX.UUID'}]}],ownership:{mutableColumns:['state']},parentRows:{table:'old'}};
   const result=config.tableSettings(table,{mode:'READ_EXISTING',sourceColumns:['id'],filters:[{field:'active',value:'true'}],orderBy:'id, code',maxRows:7});
   assert.deepEqual({...result.existingData,where:{...result.existingData.where}},{where:{active:true},orderBy:['id','code'],maxRows:7});
-  assert.equal(result.parentRows,null);assert.deepEqual(result.columns,table.columns);assert.deepEqual(result.ownership,table.ownership);assert.equal(table.parentRows.table,'old');
+  assert.equal(result.parentRows,null);assert.deepEqual(result.columns[0].regs,[]);assert.equal(result.ownership,null);assert.equal(table.columns[0].regs[0].code,'FIX.UUID');assert.equal(table.parentRows.table,'old');
   const expanded=config.tableSettings(result,{mode:'PER_PARENT',parentTable:'parents',rowsPerParent:2,condition:'#state == \'SAVED\''});
   assert.equal(expanded.existingData,null);assert.equal(expanded.parentRows.rowsPerParent,2);
+});
+test('a projected source can reselect fields from fresh full table metadata',()=>{
+  const table={name:'source',columns:[{name:'id',javaType:'java.lang.String',regs:[]}]};
+  const catalog=[{name:'id',javaType:'java.lang.String'},{name:'display_name',javaType:'java.lang.String'}];
+  const draft={mode:'READ_EXISTING',sourceColumns:['id','display_name'],filters:[],orderBy:'id',maxRows:10};
+  const result=config.tableSettings(table,draft,catalog);
+  assert.deepEqual(result.columns.map(c=>c.name),['id','display_name']);
+  assert.deepEqual(result.columns.map(c=>c.regs),[[],[]]);
+  assert.equal(table.columns.length,1);
 });
 test('virtual fields are explicit, validated, independent and unavailable for read-only sources',()=>{
   const original={name:'rows',columns:[{name:'id',regs:[{code:'FIX.UUID'}]}]};

@@ -10,6 +10,7 @@
       </el-form-item>
       <template v-if="draft.mode === 'READ_EXISTING'">
         <el-alert :title="$t('仅加载所选字段作为候选值，不向此表写入；筛选条件之间为 AND。')" type="info" :closable="false" />
+        <p class="advanced-help">{{ $t('应用只读模式会清除候选字段的生成规则和写入归属声明。') }}</p>
         <el-form-item :label="$t('候选字段')" style="margin-top:16px"><el-select v-model="draft.sourceColumns" multiple filterable style="width:100%"><el-option v-for="col in physicalColumns" :key="col.name" :value="col.name" :label="col.name" /></el-select></el-form-item>
         <div class="advanced-section">
           <label>{{ $t('等值筛选') }}</label>
@@ -48,11 +49,11 @@ import { t } from '../i18n';
 import config from '../advanced-config';
 export default {
   name: 'TableOptions',
-  props: { visible: Boolean, table: Object, tables: { type: Array, default: () => [] } },
+  props: { visible: Boolean, table: Object, tables: { type: Array, default: () => [] }, catalogColumns: { type: Array, default: () => [] } },
   data: () => ({ draft: null, working: null, virtualName: '', virtualType: 'java.lang.String', virtualTypes: ['java.lang.String','java.lang.Long','java.lang.Integer','java.lang.Boolean','java.math.BigDecimal'] }),
   computed: {
     visibleSync: { get() { return this.visible; }, set(value) { this.$emit('update:visible',value); } },
-    physicalColumns() { return this.working ? this.working.columns.filter(c => !c.virtual) : []; },
+    physicalColumns() { const columns=this.catalogColumns.length?this.catalogColumns:this.working?this.working.columns:[];return columns.filter(c => !c.virtual); },
     virtualColumns() { return this.working ? this.working.columns.filter(c => c.virtual) : []; },
     parentTables() { return this.tables.filter(t => this.table && t.name !== this.table.name); }
   },
@@ -60,7 +61,7 @@ export default {
   methods: {
     addVirtualField() { try { this.working=config.addVirtual(this.working,this.virtualName,this.virtualType);this.virtualName=''; } catch(error) { this.$message.warning(t(error.message)); } },
     removeVirtual(name) { this.working.columns=this.working.columns.filter(c => !c.virtual || c.name!==name); },
-    save() { try { const updated=config.tableSettings(this.working,this.draft);this.$emit('save',updated);this.visibleSync=false; } catch(error) { this.$message.warning(t(error.message)); } }
+    save() { try { const updated=config.tableSettings(this.working,this.draft,this.physicalColumns);this.$emit('save',updated);this.visibleSync=false; } catch(error) { this.$message.warning(t(error.message)); } }
   }
 };
 </script>

@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.server import Settings
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
@@ -137,6 +138,10 @@ class JavaAPI:
         return result.get("data")
 
 
+# Pinned SDK 1.29.0 Settings refers to FastMCP before the class is defined.
+# Resolve that annotation before pydantic-settings inspects environment sources;
+# do not suppress IncompleteFieldDefinitionWarning or mutate installed packages.
+Settings.model_rebuild(_types_namespace={"FastMCP": FastMCP})
 api = JavaAPI(os.environ.get("FAKER_BASE_URL", "http://127.0.0.1:8085"), os.environ.get("FAKER_CONNECTIONS_FILE"), os.environ.get("FAKER_SCHEME_VALUES_FILE"))
 mcp = FastMCP("faker-data", log_level="WARNING", instructions=(
     "Generate related test data using the existing faker-data rules engine. Read faker://rules before configuring. "
@@ -211,15 +216,19 @@ def save_scheme(name: str, tables: list[dict], connection: str = "default") -> d
 
 @mcp.tool(annotations=READ, structured_output=True)
 def get_scheme(scheme_id: int | None = None) -> dict[str, Any]:
-    """List scheme IDs/names, or read one scheme's field rules. Never returns database connection credentials."""
+    """List scheme IDs/names, or read a server-redacted scheme view. UI-imported private bindings are hidden even without a Python values file. The view is not a backup: do not save its placeholders as real rules; generate_data uses the stored original by ID. Stale legacy bindings must be explicitly re-imported before viewing/sharing."""
     if scheme_id is None:
         rows = api.request("/scheme/list")
         return {"schemes": [{"id": row["id"], "name": row["name"], "kind": row.get("kind", "RULES")} for row in rows]}
     if scheme_id < 1:
         raise ToolError("scheme_id must be positive.")
-    row = api.request("/scheme/" + str(scheme_id))
-    return api.scrub({"id": row["id"], "name": row["name"], "kind": row.get("kind", "RULES"),
-                      "tables": json.loads(row["tablesJson"])})
+    # The raw UI endpoint contains local bound values unknown to the Python
+    # profiles. Never fall back to it if the Java privacy check fails.
+    document = api.request("/scheme/" + str(scheme_id) + "/export")
+    if not isinstance(document, dict) or document.get("format") != "faker-data.scheme":
+        raise ToolError("A server-redacted scheme view is required. Update the local service or re-import stale private bindings.")
+    return api.scrub({"id": scheme_id, "name": document["name"], "kind": "RULES", "tables": document["tables"],
+                      "requiredLocalValues": document.get("requiredLocalValues", []), "view": "REDACTED_NOT_A_BACKUP"})
 
 
 @mcp.tool(annotations=READ, structured_output=True)

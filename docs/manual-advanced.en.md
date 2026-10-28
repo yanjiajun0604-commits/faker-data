@@ -2,6 +2,8 @@
 
 [中文](manual-advanced.md)
 
+Applying read-only mode clears candidate-field generation rules and write-ownership declarations; the dialog explains this before applying. Opening table options refreshes full column metadata, so fields omitted from a projection can be selected again without removing/recreating the table.
+
 After connecting to a test database and selecting tables, open **Rows & links** beside a table on the rule configuration page. Existing ordinary rules, tree settings, scheme **Use**, and Chinese/English switching remain available.
 
 ## Row sources

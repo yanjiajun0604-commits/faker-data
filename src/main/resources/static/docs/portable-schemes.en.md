@@ -32,11 +32,15 @@ Same names conflict by default; use `replace_existing=true` only for an intended
 
 ## Persistence, re-export and limits
 
-Local Java schemes still contain their private connection and bound values; protect the data directory. Imported private pointer metadata is stored atomically with the scheme, so re-export masks bound values again. Validation uses a separate copy so planner sorting cannot shift those pointers. Deleting the scheme also deletes its pointer metadata. Legacy manual edits can move values; re-review the exported artifact after editing.
+Local Java schemes still contain private connections and bound values; protect the data directory. Ordinary saves rebase private paths by table/column and derived-table identity atomically with configuration. Changed anonymous rule/input positions conservatively mask the entire field rule block. Removing or renaming a bound field fails ordinary overwrite: use portable import with explicit new bindings instead. Explicit imports replace the complete binding set; scheme deletion removes binding metadata.
+
+This is not general data-loss prevention. If you manually copy private text to another ordinary field, declare new bindings and review the export. Do not save the MCP scrubbed view as original configuration.
+
+Local bindings also store a value checksum, without another plaintext copy. Export/ordinary overwrite verifies it rather than trusting stale paths from older clients. Early source-preview bindings without checksums require explicit re-import using the original portable document and local values; they are not guessed or automatically trusted. Both save/import retain explicit NULL predicates instead of silently dropping an IS NULL source filter.
 
 Export reads the scheme and its private pointer metadata from one local database snapshot, so concurrent replacement cannot mix versions and expose a formerly bound value.
 
-MCP `get_scheme` redacts configured private value strings. Its redacted display is not a lossless editable backup: do not save it back to reconstruct a bound scheme. Use `generate_data(scheme_id=...)` to execute the locally stored configuration, and `export_scheme` for a portable document. Public rule-code names remain visible.
+MCP `get_scheme` first obtains the server-redacted document, hiding UI-bound private values even without a Python values file; it never falls back to raw local configuration. Known private-file strings receive additional scrubbing. The view is marked REDACTED_NOT_A_BACKUP: do not save placeholders back as a real scheme. Use `generate_data(scheme_id=...)` for the stored original, and `export_scheme` for portable sharing. Public rule-code names remain visible.
 
 HTTP import: `POST /scheme/import` with document/dataSource/replacements/name/replaceExisting/confirmTrustedCode; private local UI may supply replacements directly. No source connection is inferred from the document. Payload: at most 2 MiB, 100 tables, 550 columns/table (virtual max 50), 1024 rules/list, 10000 private pointers, nesting depth 40 and 100000 JSON nodes. More semantic/runtime bounds apply. JSON schemas validate structure; DB preflight and actual application acceptance remain separate.
 

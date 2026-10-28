@@ -127,9 +127,24 @@ class AdapterTest(unittest.TestCase):
             self.assertEqual("[REDACTED]", server.JavaAPI("http://127.0.0.1:8085", None, str(path)).scrub("binding-secret"))
 
     def test_scheme_output_excludes_connection_secrets(self):
-        row = {"id": 1, "name": "orders", "dataSourceJson": "secret", "tablesJson": "[]"}
-        with patch.object(server.api, "request", return_value=row):
-            self.assertEqual({"id": 1, "name": "orders", "kind": "RULES", "tables": []}, server.get_scheme(1))
+        document = {"format": "faker-data.scheme", "name": "orders", "tables": [], "requiredLocalValues": []}
+        with patch.object(server.api, "request", return_value=document) as request:
+            self.assertEqual({"id": 1, "name": "orders", "kind": "RULES", "tables": [], "requiredLocalValues": [], "view": "REDACTED_NOT_A_BACKUP"}, server.get_scheme(1))
+            request.assert_called_once_with("/scheme/1/export")
+
+    def test_ui_bound_private_values_remain_local_without_a_values_file(self):
+        private = {"id": 1, "name": "orders", "tablesJson": json.dumps([{"name": "orders", "columns": [
+            {"name": "note", "regs": [{"code": "RES.INPUTAREA", "inputs": [{"value": "UI_PRIVATE_MARKER"}]}]}]}])}
+        tables = json.loads(private["tablesJson"])
+        tables[0]["columns"][0]["regs"][0]["inputs"][0]["value"] = None
+        document = {"format": "faker-data.scheme", "name": "orders", "tables": tables,
+                    "requiredLocalValues": [{"pointer": "/tables/0/columns/0/regs/0/inputs/0/value", "reason": "PRIVATE_BINDING"}]}
+        client = server.JavaAPI("http://127.0.0.1:8085", None)
+        with patch.object(server, "api", client), patch.object(client, "request", side_effect=lambda path: document if path.endswith("/export") else private):
+            view = server.get_scheme(1)
+        self.assertNotIn("UI_PRIVATE_MARKER", json.dumps(view))
+        self.assertIsNone(view["tables"][0]["columns"][0]["regs"][0]["inputs"][0]["value"])
+        self.assertTrue(view["requiredLocalValues"])
 
     def test_errors_redact_profile_url_and_password(self):
         with tempfile.TemporaryDirectory() as folder:

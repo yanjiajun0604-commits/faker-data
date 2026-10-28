@@ -6,6 +6,8 @@ MCP 适配器把现有 Java 生成器接给 AI 客户端。普通字段仍使用
 
 ## 安装与启动
 
+推荐使用[统一启动入口](launcher.md)：`python faker.py setup --jar /path/current.jar`，再执行 `python faker.py config`。客户端可管理专属 Java 子进程，或通过 `--attach` 明确复用已有服务。下面保留手动分步方式。
+
 需要 Java 8+、Python 3.10+，以及支持 stdio MCP 的 AI 客户端。在项目根目录执行：
 
 ```sh
@@ -86,6 +88,8 @@ AI 应先用内置只读工具理解表结构、关联及业务条件；不必�
 超时后写入结果可能未知，不要自动重试保存或生成；保存可以按名称核对，生成应保留已拿到的任务 ID 查询。若任务 ID 都未返回，先核对 Java 任务记录与目标数据。三种状态是三次独立事务，不承诺跨任务整体回滚。
 
 ## 可运行的通用案例
+
+需要可重复的完整操作时使用[公开订单验收包](order-lifecycle.md)：实际通过 stdio MCP 生成、核查、保留回执，之后明确授权按批次清理；可选择二进制字段扩展。
 
 先在独立的空测试库执行 [订单示例 SQL](../examples/mysql-order-schema.sql)，再生成三个普通配置：
 
