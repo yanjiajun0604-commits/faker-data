@@ -1,6 +1,13 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const config=require('../src/advanced-config');
+test('seed input preserves zero and negative integers, rejects precision loss and clears source-only settings',()=>{
+  const table={name:'rows',columns:[{name:'id',regs:[]}]};
+  for(const value of ['0','-42','9007199254740991'])assert.equal(config.tableSettings(table,{mode:'GENERATE',generationSeed:value,locale:'en'}).generationSeed,Number(value));
+  for(const value of ['1.5','9007199254740993','NaN'])assert.throws(()=>config.tableSettings(table,{mode:'GENERATE',generationSeed:value}));
+  assert.equal(config.tableSettings(table,{mode:'GENERATE',generationSeed:''}).generationSeed,null);
+  assert.equal(config.tableSettings({...table,generationSeed:42,locale:'en'},{mode:'READ_EXISTING',sourceColumns:['id'],filters:[],orderBy:'id',maxRows:10}).generationSeed,null);
+});
 test('source selectors preserve scalar types, explicit null and reject duplicate/structured values',()=>{
   const where={state:'SAVED',enabled:true,code:'001',count:10,optional:null};
   assert.deepEqual({...config.rowsToFilters(config.filtersToRows(where))},where);

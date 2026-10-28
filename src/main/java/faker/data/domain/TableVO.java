@@ -10,6 +10,10 @@ import java.util.Set;
 public class TableVO {
     private String name;
     private Integer size;
+    /** Optional reproducible built-in cell stream; keep unchanged with the recipe. */
+    private Long generationSeed;
+    /** Controls the built-in person-name provider only: zh_CN or en. */
+    private String locale;
     private List<ColumnInfo> columns;
     private Set<String> refOtherTables = new HashSet<>();
 

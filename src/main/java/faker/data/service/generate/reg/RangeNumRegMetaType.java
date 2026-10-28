@@ -25,6 +25,6 @@ public class RangeNumRegMetaType extends AbstractRegMetaType {
 
     @Override
     protected Object parseValue(MetaTypeVO reg) {
-        return random.nextInt(reg.getMaxSize() - reg.getMinSize() + 1) + reg.getMinSize();
+        return faker.data.service.generate.GenerationRandom.current().nextInt(reg.getMaxSize() - reg.getMinSize() + 1) + reg.getMinSize();
     }
 }

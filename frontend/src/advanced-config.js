@@ -23,6 +23,12 @@ function tableSettings(table, draft, catalogColumns) {
   const result = clone(table);
   result.existingData = null;
   result.parentRows = null;
+  if (draft.generationSeed !== undefined) {
+    const text = String(draft.generationSeed).trim();
+    if (text && (!/^-?\d+$/.test(text) || !Number.isSafeInteger(Number(text)))) throw new Error('随机种子必须是安全范围内的整数');
+    result.generationSeed = text ? Number(text) : null;
+    result.locale = draft.locale || null;
+  }
   if (draft.mode !== 'GENERATE' && result.treeConfig) throw new Error('请先关闭树形配置，再切换表的行来源');
   if (draft.mode === 'READ_EXISTING') {
     if (result.columns.some(c => c.virtual)) throw new Error('只读候选表不能包含虚拟字段');
@@ -36,6 +42,7 @@ function tableSettings(table, draft, catalogColumns) {
       return selected;
     });
     result.ownership = null;
+    result.generationSeed = null;result.locale = null;
     result.existingData = { where: rowsToFilters(draft.filters), orderBy: draft.orderBy.split(',').map(s => s.trim()).filter(Boolean), maxRows: draft.maxRows };
   } else if (draft.mode === 'PER_PARENT') {
     if (!draft.parentTable || draft.parentTable === table.name) throw new Error('请选择其他已选表作为父表');

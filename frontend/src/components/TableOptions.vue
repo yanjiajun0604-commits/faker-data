@@ -31,6 +31,10 @@
         <el-form-item :label="$t('父行条件（可选）')"><el-input v-model="draft.condition" placeholder="#state == 'SAVED'" /><p class="advanced-help">{{ $t('条件中的 #字段名 来自父行；子表关联字段仍需配置跨表引用。') }}</p></el-form-item>
       </template>
       <p v-else class="advanced-help">{{ $t('使用表的数据量或已有树形配置生成新行。') }}</p>
+      <section v-if="draft.mode !== 'READ_EXISTING'" class="advanced-section">
+        <el-form-item :label="$t('随机种子（可选）')"><el-input v-model="draft.generationSeed" placeholder="42" /><p class="advanced-help">{{ $t('相同种子可复现受支持的普通规则；重复生成仍可能造成主键冲突，不等同于幂等。') }}</p></el-form-item>
+        <el-form-item :label="$t('姓名语言')"><el-select v-model="draft.locale"><el-option value="zh_CN" :label="$t('中文姓名')" /><el-option value="en" label="English names" /></el-select><p class="advanced-help">{{ $t('仅影响人名规则；日期请固定绝对范围，扩展和数据库默认值不受种子控制。') }}</p></el-form-item>
+      </section>
       <section v-if="draft.mode !== 'READ_EXISTING' || virtualColumns.length" class="advanced-section">
         <strong>{{ $t('虚拟字段') }}</strong><p class="advanced-help">{{ $t('使用普通规则生成关联标记，参与引用和条件，但不写入数据库。添加后在字段列表配置规则。') }}</p>
         <div v-if="draft.mode !== 'READ_EXISTING'" class="filter-row">
@@ -57,7 +61,7 @@ export default {
     virtualColumns() { return this.working ? this.working.columns.filter(c => c.virtual) : []; },
     parentTables() { return this.tables.filter(t => this.table && t.name !== this.table.name); }
   },
-  watch: { visible(value) { if (!value || !this.table) return; this.working=config.clone(this.table); this.virtualName=''; const source=this.table.existingData || {};const parent=this.table.parentRows || {};this.draft={mode:this.table.existingData?'READ_EXISTING':this.table.parentRows?'PER_PARENT':'GENERATE',sourceColumns:this.table.columns.filter(c=>!c.virtual).map(c=>c.name),filters:config.filtersToRows(source.where),orderBy:(source.orderBy || []).join(', '),maxRows:source.maxRows || 10000,parentTable:parent.table || '',rowsPerParent:parent.rowsPerParent || 1,condition:parent.condition || ''}; } },
+  watch: { visible(value) { if (!value || !this.table) return; this.working=config.clone(this.table); this.virtualName=''; const source=this.table.existingData || {};const parent=this.table.parentRows || {};this.draft={generationSeed:this.table.generationSeed==null?'':String(this.table.generationSeed),locale:this.table.locale || 'zh_CN',mode:this.table.existingData?'READ_EXISTING':this.table.parentRows?'PER_PARENT':'GENERATE',sourceColumns:this.table.columns.filter(c=>!c.virtual).map(c=>c.name),filters:config.filtersToRows(source.where),orderBy:(source.orderBy || []).join(', '),maxRows:source.maxRows || 10000,parentTable:parent.table || '',rowsPerParent:parent.rowsPerParent || 1,condition:parent.condition || ''}; } },
   methods: {
     addVirtualField() { try { this.working=config.addVirtual(this.working,this.virtualName,this.virtualType);this.virtualName=''; } catch(error) { this.$message.warning(t(error.message)); } },
     removeVirtual(name) { this.working.columns=this.working.columns.filter(c => !c.virtual || c.name!==name); },

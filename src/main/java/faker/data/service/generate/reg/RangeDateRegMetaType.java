@@ -28,6 +28,6 @@ public class RangeDateRegMetaType extends AbstractRegMetaType {
         Long[] dateRange = reg.getDateRange();
         Long start = dateRange[0];
         Long end = dateRange[1];
-        return random.longs(start, end + 1).findFirst().getAsLong();
+        return faker.data.service.generate.GenerationRandom.current().longs(start, end + 1).findFirst().getAsLong();
     }
 }

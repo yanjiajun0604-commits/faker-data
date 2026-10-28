@@ -27,10 +27,10 @@ public class RangeStringRegMetaType extends AbstractRegMetaType {
 
     @Override
     protected Object parseValue(MetaTypeVO reg) {
-        int len = random.nextInt(reg.getMaxSize() - reg.getMinSize() + 1) + reg.getMinSize();
+        int len = faker.data.service.generate.GenerationRandom.current().nextInt(reg.getMaxSize() - reg.getMinSize() + 1) + reg.getMinSize();
         StringBuilder res = new StringBuilder();
         for (int i = 0; i < len; i++) {
-            res.append(str.charAt(random.nextInt(str.length())));
+            res.append(str.charAt(faker.data.service.generate.GenerationRandom.current().nextInt(str.length())));
         }
         return res.toString();
     }

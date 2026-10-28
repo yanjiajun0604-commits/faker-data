@@ -36,7 +36,7 @@ public class AbstractResInputMetaType extends AbstractResMetaType {
         }
         if (valid.isEmpty() || totalWeight == 0) return null;
 
-        int rand = ThreadLocalRandom.current().nextInt(totalWeight);
+        int rand = faker.data.service.generate.GenerationRandom.current().nextInt(totalWeight);
         int cumulative = 0;
         for (InputItem item : valid) {
             cumulative += item.getWeight() != null && item.getWeight() > 0 ? item.getWeight() : 1;
