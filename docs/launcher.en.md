@@ -46,6 +46,8 @@ Open `http://127.0.0.1:8085/`. Ctrl+C stops only this command's child. Busy port
 
 ## AI client
 
+In WorkBuddy, trust `faker-data` in the connector settings after adding the configuration, then start a new conversation. Call `list_tables` to check that the tool is available.
+
 ```sh
 python faker.py config
 ```

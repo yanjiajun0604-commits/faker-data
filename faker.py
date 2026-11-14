@@ -235,7 +235,8 @@ def run(args, home):
             ready = False
         log(f"Python {sys.version.split()[0]}; Java {major}; selected JAR {info['version']}; MCP {MCP_VERSION}; contracts v1")
         log(f"Service: {'compatible (exact build not verified)' if compatible else 'stopped, port available'}")
-        log("Connections: " + ("configured locally (not connected/tested)" if ready else "edit private connections.json before database tools"))
+        log("Connections: " + ("configured locally (not connected/tested)" if ready else
+                               "check type, URL, username and a non-empty test account password in private connections.json"))
         return
     if args.command == "mcp":
         check_adapter(home)

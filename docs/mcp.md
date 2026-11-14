@@ -51,6 +51,8 @@ macOS/Linux 的 command 改为 `/path/to/faker-data/.venv/bin/python`。不同�
 
 ## AI 如何使用
 
+WorkBuddy 添加配置后，在连接器里信任 `faker-data`，再开新会话。连接配置需要填写测试账号的非空密码。请在本机私人连接文件中把 `CHANGE_ME` 替换为实际值。
+
 可以向 AI 描述：
 
 > 使用 faker-data 的 list_tables、describe_table、read_rows 阅读我的测试库结构。参考 faker-data 的 faker://rules，用已有规则生成订单和明细：保存 50、提交中 20、完成 100。客户引用库中启用的客户。先检查规则，普通字段不要写扩展，确认在我授权的测试库生成，并返回任务结果和验收查询。
@@ -86,6 +88,31 @@ AI 应先用内置只读工具理解表结构、关联及业务条件；不必�
 `connection` 是私有连接文件中的名称，默认 `default`。任务执行时使用明确选择的连接配置，不盲用方案中遗留的旧连接。校验结果的 `scope=CONFIGURATION_ONLY`，未检查项包括真实数据库约束、已有候选、扩展安装和业务工作流。数据库与业务验收仍需执行。
 
 超时后写入结果可能未知，不要自动重试保存或生成；保存可以按名称核对，生成应保留已拿到的任务 ID 查询。若任务 ID 都未返回，先核对 Java 任务记录与目标数据。三种状态是三次独立事务，不承诺跨任务整体回滚。
+
+### 调用示例
+
+`read_rows` 必须提供 `columns`。`order_by` 是排序对象数组。以下示例读取公开订单样例库中的启用客户。
+
+```json
+{
+  "table": "demo_customers",
+  "columns": ["id", "display_name"],
+  "where": [{"column": "enabled", "op": "eq", "value": 1}],
+  "order_by": [{"column": "id", "direction": "ASC"}],
+  "limit": 10
+}
+```
+
+生成后，用返回的 `taskId` 调用 `get_task`。从响应的 `state` 字段读取任务状态，例如 `FINISHED`。
+
+`verify_batch` 的每条 `REFERENCE` 检查只描述一组引用关系。如果两个子表字段分别引用同一张父表的 `id`，传入两条检查。复合主键则在同一条检查中列出完整的列映射。以下是订单示例的 `checks` 数组。
+
+```json
+[
+  {"kind": "REFERENCE", "table": "demo_order_tasks", "targetTable": "demo_order_contents", "columns": {"input_content_id": "id"}, "targetScope": "BATCH", "allowNull": false},
+  {"kind": "REFERENCE", "table": "demo_order_tasks", "targetTable": "demo_order_contents", "columns": {"output_content_id": "id"}, "targetScope": "BATCH", "allowNull": false}
+]
+```
 
 ## 可运行的通用案例
 

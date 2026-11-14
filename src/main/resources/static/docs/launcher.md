@@ -46,6 +46,8 @@ python faker.py start
 
 ## AI 客户端
 
+WorkBuddy 添加配置后，在连接器里对 `faker-data` 点一次「信任」，再开新会话。可以先调用 `list_tables` 确认工具可用。
+
 ```sh
 python faker.py config
 ```
