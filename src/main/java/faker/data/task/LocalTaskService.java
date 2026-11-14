@@ -9,6 +9,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
+import faker.data.batch.GenerationBatchStore;
 import faker.data.batch.TargetRowSnapshot;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -16,19 +17,23 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** 单进程有界队列；SQLite 仅记录任务状态，不保存带凭据的请求。 */
 @Service
 public class LocalTaskService {
+    private static final String GENERATION_TASK = "GEN_DATA";
     private final JdbcTemplate jdbc;
+    private final GenerationBatchStore batches;
     private final ReferenceCache cache;
     private final Map<String,AsyncTaskExecutor> executors=new HashMap<>();
     private final ThreadPoolExecutor pool;
     private final TransactionTemplate local;
     private final ObjectMapper json=new ObjectMapper();
-    public LocalTaskService(JdbcTemplate jdbc,ReferenceCache cache,List<AsyncTaskExecutor> handlers,
+    public LocalTaskService(JdbcTemplate jdbc,GenerationBatchStore batches,ReferenceCache cache,List<AsyncTaskExecutor> handlers,
             @Value("${faker.tasks.workers:2}") int workers,@Value("${faker.tasks.queue-capacity:100}") int capacity){
         if(workers<1 || capacity<1) throw new IllegalArgumentException("任务线程数和队列容量必须大于 0");
-        this.jdbc=jdbc;this.cache=cache;
+        this.jdbc=jdbc;this.batches=batches;this.cache=cache;
         this.local=new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
         jdbc.execute("CREATE TABLE IF NOT EXISTS faker_generation_request(request_id TEXT PRIMARY KEY,payload_hash TEXT NOT NULL,task_id TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL)");
         if(!jdbc.queryForList("PRAGMA table_info(faker_task)").stream().anyMatch(c->"error_detail".equals(c.get("name"))))jdbc.execute("ALTER TABLE faker_task ADD COLUMN error_detail TEXT");
+        if(!jdbc.queryForList("PRAGMA table_info(faker_task)").stream().anyMatch(c->"batch_journal_required".equals(c.get("name"))))
+            jdbc.execute("ALTER TABLE faker_task ADD COLUMN batch_journal_required INTEGER NOT NULL DEFAULT 0");
         for(AsyncTaskExecutor h:handlers) {
             if(executors.put(h.getTaskPoolType(),h)!=null) throw new IllegalStateException("任务类型重复");
         }
@@ -58,7 +63,7 @@ public class LocalTaskService {
         catch(RejectedExecutionException ex){update(id,TaskState.ERROR,0,"提交失败","任务队列已满或服务正在关闭");throw new IllegalStateException("任务队列已满或服务正在关闭，请稍后重试");}
         return id;
     }
-    private void insertTask(String id,String type,long now){jdbc.update("INSERT INTO faker_task(id,type,state,progress,created_at,updated_at) VALUES(?,?,'WAITING',0,?,?)",id,type,now,now);}
+    private void insertTask(String id,String type,long now){jdbc.update("INSERT INTO faker_task(id,type,state,progress,created_at,updated_at,batch_journal_required) VALUES(?,?,'WAITING',0,?,?,?)",id,type,now,now,GENERATION_TASK.equals(type)?1:0);}
     public Map<String,Object> findRequest(String key) {
         requestKey(key);List<String> ids=jdbc.queryForList("SELECT task_id FROM faker_generation_request WHERE request_id=?",String.class,key);
         Map<String,Object> result=new LinkedHashMap<>();result.put("requestId",key);result.put("found",!ids.isEmpty());
@@ -83,9 +88,53 @@ public class LocalTaskService {
     public TaskProcessVO query(String id){
         List<TaskProcessVO> rows=jdbc.query("SELECT * FROM faker_task WHERE id=?",(rs,n)->{
             TaskProcessVO result=new TaskProcessVO(rs.getDouble("progress"),TaskState.valueOf(rs.getString("state")),rs.getString("error_msg"),rs.getString("result"));
-            String detail=rs.getString("error_detail");if(result.getState()==TaskState.ERROR && detail!=null)try{result.setDiagnostic(json.readValue(detail,new TypeReference<Map<String,Object>>(){}));}catch(java.io.IOException invalid){throw new IllegalStateException("TASK_DIAGNOSTIC_INVALID",invalid);}return result;
+            String detail=rs.getString("error_detail");
+            if(result.getState()==TaskState.ERROR) {
+                if(GENERATION_TASK.equals(rs.getString("type")) && "运行中断".equals(result.getResult())) {
+                    addRecoveryDiagnostic(result,id,rs.getBoolean("batch_journal_required"));
+                } else if(detail!=null) {
+                    try{result.setDiagnostic(json.readValue(detail,new TypeReference<Map<String,Object>>(){}));}
+                    catch(java.io.IOException invalid){throw new IllegalStateException("TASK_DIAGNOSTIC_INVALID",invalid);}
+                }
+            }
+            return result;
         },id);
         return rows.isEmpty()?new TaskProcessVO(0D,TaskState.NONE,null,"任务不存在"):rows.get(0);
+    }
+    private void addRecoveryDiagnostic(TaskProcessVO task,String id,boolean journalRequired) {
+        // The generation engine durably opens its local journal before any target insert.
+        // Pre-upgrade tasks may predate that guarantee, so a missing receipt is inconclusive for them.
+        String batchState=batches.findState(id).orElse(journalRequired?"NOT_STARTED":"UNAVAILABLE");
+        boolean safeToRetry;
+        String next;
+        switch(batchState) {
+            case "NOT_STARTED":
+            case "ROLLED_BACK":
+                safeToRetry=true;
+                next="Submit the same generation with a new request_id if it is still needed. The prior task did not commit.";
+                task.setErrorMsg("上次运行中断，已确认未提交数据。如仍需生成，请使用新的请求标识提交。");
+                break;
+            case "COMMITTED":
+            case "CLEANED":
+                safeToRetry=false;
+                next="Inspect get_batch. The original generation committed; do not retry it.";
+                break;
+            case "UNKNOWN":
+                safeToRetry=false;
+                next="Inspect get_batch, then use reconcile_batch with confirm_commit=false. Do not retry while the outcome is unknown.";
+                break;
+            default:
+                safeToRetry=false;
+                next="The journal cannot establish the write outcome. Check the target and execution history before retrying.";
+                break;
+        }
+        Map<String,Object> diagnostic=new LinkedHashMap<>();
+        diagnostic.put("code","GENERATION_INTERRUPTED");
+        diagnostic.put("batchId",id);
+        diagnostic.put("batchState",batchState);
+        diagnostic.put("safeToRetry",safeToRetry);
+        diagnostic.put("next",next);
+        task.setDiagnostic(diagnostic);
     }
     public List<Map<String,Object>> types(){
         List<Map<String,Object>> result=new ArrayList<>();

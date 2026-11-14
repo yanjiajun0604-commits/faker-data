@@ -53,7 +53,7 @@ class JavaAPI:
                 or not all(isinstance(profile.get(k), str) and profile[k] for k in ("url", "username"))):
             raise ToolError("Unknown or incomplete connection profile. Check the selected name, type, url and username in the local connections file.")
         if not isinstance(profile.get("password"), str) or not profile["password"] or "CHANGE_ME" in profile["password"]:
-            raise ToolError("The selected connection requires a non-empty database password. Set the test account password in the private local connections file.")
+            raise ToolError("The selected connection requires a non-empty database password. If the test account has no password, set one in the database or create a dedicated test account with a password. Then update the private local connections file.")
         return {k: profile[k] for k in ("type", "url", "username", "password")}
 
     def scrub(self, value: Any) -> Any:
@@ -283,7 +283,7 @@ def generate_data(scheme_id: int, connection: str = "default", confirm_write: bo
             raise ToolError("Database preflight failed: " + str(checked.get("errors", [])))
     task_id = api.request("/publish/task/GEN_DATA", {"requestId": request_id, "dataSource": source, "tables": tables})
     return {"taskId": task_id, "batchId": task_id, "requestId": request_id, "type": "GEN_DATA", "schemeId": scheme_id, "connection": connection,
-            "next": "Poll get_task and get_batch. Keep the same request_id; never use a new ID to retry an unknown write."}
+            "next": "Poll get_task and follow any recovery diagnostic. Keep the same request_id after a timeout or unknown write; for an interrupted task, use a new ID only when safeToRetry is true."}
 
 
 @mcp.tool(annotations=READ, structured_output=True)
@@ -296,7 +296,7 @@ def get_request(request_id: str) -> dict[str, Any]:
 
 @mcp.tool(annotations=READ, structured_output=True)
 def get_task(task_id: str) -> dict[str, Any]:
-    """Read a generation task's state, progress and sanitized error. FINISHED means committed generation, not business acceptance."""
+    """Read a generation task's state, progress and sanitized error. For GENERATION_INTERRUPTED, follow diagnostic.next and only use a new request_id when diagnostic.safeToRetry is true. FINISHED means committed generation, not business acceptance."""
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", task_id):
         raise ToolError("Invalid task_id.")
     return api.scrub({"taskId": task_id, **api.request("/asyncTask/queryProcess/" + task_id)})

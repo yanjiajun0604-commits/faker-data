@@ -42,7 +42,7 @@ On Windows use `C:/path/to/faker-data/.venv/Scripts/python.exe` as command and f
 
 ## AI workflow
 
-After adding the configuration in WorkBuddy, trust `faker-data` in the connector settings and start a new conversation. The connection profile requires a non-empty test account password. Replace `CHANGE_ME` in the private local connections file.
+After adding the configuration in WorkBuddy, trust `faker-data` in the connector settings and start a new conversation. The connection profile requires a non-empty test account password. If the test account has no password, set one in the database or create a dedicated test account with a password. Then replace `CHANGE_ME` in the private local connections file.
 
 Ask the AI to inspect the selected database with built-in `list_tables`, `describe_table` and `read_rows`, then read `faker://rules`. A separate database MCP is optional; business relationships and workflow requirements still need evidence. See [inspection limits and HTTP examples](database-inspection.en.md). For example: “Generate 50 saved orders, 20 submitted and 100 approved, with details and valid existing customers. Use ordinary rules wherever supported. Validate, execute within my authorized test database, and report tasks and verification queries.”
 

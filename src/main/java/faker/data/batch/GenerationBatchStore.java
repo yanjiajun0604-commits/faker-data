@@ -96,6 +96,10 @@ public class GenerationBatchStore {
     private void transition(String id,String state,String old){if(jdbc.update("UPDATE faker_generation_batch SET state=?,updated_at=? WHERE batch_id=? AND state=?",state,System.currentTimeMillis(),id,old)!=1)throw new IllegalStateException("BATCH_STATE_CONFLICT");}
     public void requireCommitted(String id){if(!"COMMITTED".equals(jdbc.queryForObject("SELECT state FROM faker_generation_batch WHERE batch_id=?",String.class,id)))throw new IllegalStateException("BATCH_COMMIT_RECEIPT_UNKNOWN: inspect batch before retrying");}
 
+    public Optional<String> findState(String id) {
+        return jdbc.queryForList("SELECT state FROM faker_generation_batch WHERE batch_id=?",String.class,id).stream().findFirst();
+    }
+
     public Map<String,Object> get(String id) {
         List<Map<String,Object>> rows=jdbc.query("SELECT * FROM faker_generation_batch WHERE batch_id=?",(rs,n)->map("batchId",rs.getString("batch_id"),"taskId",rs.getString("task_id"),"state",rs.getString("state"),"databaseIdentity",decode(rs.getString("identity_json")),"recipeHash",rs.getString("recipe_hash"),"createdAt",rs.getLong("created_at"),"updatedAt",rs.getLong("updated_at")),id);
         if(rows.isEmpty())throw new IllegalArgumentException("BATCH_NOT_FOUND");Map<String,Object> out=rows.get(0);

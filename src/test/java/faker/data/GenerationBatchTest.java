@@ -22,6 +22,7 @@ class GenerationBatchTest {
     private final JdbcTemplate target=new JdbcTemplate(new DriverManagerDataSource(URL,"sa","fixture"));
     @Autowired TestRestTemplate http;
     @Autowired GenerationBatchStore store;
+    @Autowired JdbcTemplate journal;
     @DynamicPropertySource static void properties(DynamicPropertyRegistry p){p.add("faker.data-dir",DIR::toString);}
     static Path directory(){try{return Files.createTempDirectory("faker-batch-");}catch(Exception e){throw new RuntimeException(e);}}
     @BeforeEach void setup(){
@@ -63,6 +64,29 @@ class GenerationBatchTest {
         for(Map<String,Object> row:rows)assertEquals(64,((String)row.get("fingerprint")).length());
         assertEquals(2,target.queryForObject("SELECT COUNT(*) FROM headers WHERE note='database-default'",Integer.class));assertEquals(1,target.queryForObject("SELECT COUNT(*) FROM sources",Integer.class));
     }
+    @Test void interruptedTaskOnlyAllowsRetryWhenTheJournalProvesNoCommit() {
+        for (String evidence : Arrays.asList("UNAVAILABLE", "NOT_STARTED", "ROLLED_BACK", "UNKNOWN", "COMMITTED", "CLEANED")) {
+            String id = "interrupted-" + evidence;
+            boolean hasReceipt = !Arrays.asList("NOT_STARTED", "UNAVAILABLE").contains(evidence);
+            journal.update("INSERT INTO faker_task(id,type,state,progress,result,created_at,updated_at) VALUES(?,'GEN_DATA','ERROR',0,'运行中断',0,0)", id);
+            if (!"UNAVAILABLE".equals(evidence)) {
+                journal.update("UPDATE faker_task SET batch_journal_required=1 WHERE id=?", id);
+            }
+            if (hasReceipt) {
+                journal.update("INSERT INTO faker_generation_batch(batch_id,task_id,state,identity_json,recipe_hash,created_at,updated_at,ownership_scope) VALUES(?,?,?,'{}','fixture',0,0,'fixture')", id, id, evidence);
+            }
+            Map<?,?> response = http.getForObject("/asyncTask/queryProcess/" + id, Map.class);
+            Map<?,?> task = (Map<?,?>) response.get("data");
+            assertEquals("ERROR", task.get("state"));
+            Map<?,?> diagnostic = (Map<?,?>) task.get("diagnostic");
+            assertNotNull(diagnostic, task.toString());
+            boolean canRetry = Arrays.asList("NOT_STARTED", "ROLLED_BACK").contains(evidence);
+            assertEquals(evidence, diagnostic.get("batchState"));
+            assertEquals(canRetry, diagnostic.get("safeToRetry"), evidence);
+            assertEquals(id, diagnostic.get("batchId"));
+        }
+    }
+
     @Test void rollbackNeverClaimsCommittedRows() throws Exception {
         String id=generate(Arrays.asList(table("headers",2,seq("id")),table("failures",3,seq("id"))),"ERROR");
         Map<String,Object> report=batch(id);assertEquals("ROLLED_BACK",report.get("state"));assertEquals(0,report.get("rowCount"));assertEquals(false,report.get("trackable"));

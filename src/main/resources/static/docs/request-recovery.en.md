@@ -22,7 +22,18 @@ A key is not a random seed. Same key means the original task; different keys rem
 
 Startup never replays the old queue. Previously queued/running tasks become interrupted, and nonterminal batch receipts become UNKNOWN. Target commit and local journal are separate transactions: ERROR is not proof that nothing was inserted.
 
-Locate the task with get_request and inspect its [batch journal](generation-batches.en.md). For UNKNOWN:
+Locate the original task ID with `get_request`, then call `get_task`. When `diagnostic.code=GENERATION_INTERRUPTED`, follow `diagnostic.batchState`:
+
+| Batch state | Next step |
+| --- | --- |
+| `NOT_STARTED` or `ROLLED_BACK` | `safeToRetry=true`. The original task did not commit. Use a new `request_id` if generation is still needed. For `NOT_STARTED`, no batch journal exists and `get_batch` returns `BATCH_NOT_FOUND`. |
+| `COMMITTED` or `CLEANED` | `safeToRetry=false`. The original task committed. Inspect the record with `get_batch`. |
+| `UNAVAILABLE` | `safeToRetry=false`. A legacy task has no batch receipt. Check the target and execution history. |
+| `UNKNOWN` | `safeToRetry=false`. Inspect the [batch journal](generation-batches.en.md) and follow the read-only checks below. |
+
+Keep a short-lived stdio client connected until its task finishes. To poll across sessions, start Java as a separate service and use the launcher's `mcp --attach` option.
+
+For UNKNOWN:
 
 1. Observe with `reconcile_batch(batch_id, connection="default", confirm_commit=false)`, or `POST /batches/{id}/reconcile` with `{"dataSource":{...local connection...},"confirmCommit":false}`.
 2. Read-only checks compare target identity/schema and every key/full-row digest. Only a complete pre-commit snapshot with all rows matching yields `observation=ALL_MATCHING, eligible=true`. Observation changes neither target data nor local receipt.
