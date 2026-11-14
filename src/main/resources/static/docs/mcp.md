@@ -51,7 +51,7 @@ macOS/Linux 的 command 改为 `/path/to/faker-data/.venv/bin/python`。不同�
 
 ## AI 如何使用
 
-WorkBuddy 添加配置后，在连接器里信任 `faker-data`，再开新会话。连接配置需要填写测试账号的非空密码。请在本机私人连接文件中把 `CHANGE_ME` 替换为实际值。
+WorkBuddy 添加配置后，在连接器里信任 `faker-data`，再开新会话。连接配置需要填写测试账号的非空密码。如果测试账号还没有密码，请先在数据库侧设置密码，或创建带密码的专用测试账号，再在本机私人连接文件中把 `CHANGE_ME` 替换为实际值。
 
 可以向 AI 描述：
 

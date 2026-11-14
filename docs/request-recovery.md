@@ -22,7 +22,18 @@ python examples/ai_client.py --request private-demo.json --submit --request-id o
 
 服务启动不会重放旧队列。上次处理中／排队的任务记录标为中断；未终结的批次标为 UNKNOWN。目标库提交与本机账本不是一个原子事务，ERROR 不必然代表目标库没写入。
 
-先用 `get_request` 找回原 taskId，再读取[批次账本](generation-batches.md)。对于 UNKNOWN：
+先用 `get_request` 找回原 taskId，再调用 `get_task`。如果 `diagnostic.code=GENERATION_INTERRUPTED`，按 `diagnostic.batchState` 处理：
+
+| 批次状态 | 下一步 |
+| --- | --- |
+| `NOT_STARTED` 或 `ROLLED_BACK` | `safeToRetry=true`。已确认原任务未提交。仍需生成时，用新的 `request_id` 提交。对于 `NOT_STARTED`，尚无批次账本，`get_batch` 会返回 `BATCH_NOT_FOUND`。 |
+| `COMMITTED` 或 `CLEANED` | `safeToRetry=false`。原任务已提交，用 `get_batch` 查看记录。 |
+| `UNAVAILABLE` | `safeToRetry=false`。旧任务没有批次凭据，需人工核对目标库和执行历史。 |
+| `UNKNOWN` | `safeToRetry=false`。先读取[批次账本](generation-batches.md)，再按下列步骤只读核查。 |
+
+短生命周期的 stdio 客户端应保持连接直到任务结束。需要跨会话轮询时，可以先启动独立 Java 服务，再用启动器的 `mcp --attach` 连接该服务。
+
+对于 UNKNOWN：
 
 1. MCP `reconcile_batch(batch_id, connection="default", confirm_commit=false)`，或 `POST /batches/{id}/reconcile` 请求 `{"dataSource":{...本机连接...},"confirmCommit":false}`。
 2. 只读检查目标库身份、结构、全部主键与完整行摘要。只有提交前完整快照存在且全量匹配，才返回 `observation=ALL_MATCHING, eligible=true`。这个观察步骤不修改目标或本机回执。
