@@ -1,21 +1,23 @@
 # faker-data · 测试数据，不止随机
 
-当前源码安装入口：[统一 Java + MCP 启动器](docs/launcher.md)，提供独立依赖、客户端配置和环境检查；旧 Release 包不一定包含此入口。
-
-当前源码新增[内置只读数据库调查](docs/database-inspection.md)，三个读取工具、数据库预检及原五个生成／方案工具，新用户无需另装 dbquery。该能力属于源码预览，旧发行 JAR 不包含。
-
-当前源码新增：[AI MCP 接入](docs/mcp.md)、按条件精确引用，以及通用[订单示例](examples/create-order-schemes.py)。旧版已发布 JAR 不包含这些改动。
-
-
-> **访问地址：** v0.1.1 与当前源码使用 `http://127.0.0.1:8085/`，不再需要 `/faker`。旧版 v0.1.0 JAR 仍使用 `http://127.0.0.1:8085/faker/`。版本差异见[访问地址说明](docs/access-url.md)。
-
 [English](README.md) · **简体中文** · [下载可执行版](https://github.com/yanjiajun0604-commits/faker-data/releases/latest) · [AI 调用指南](AI_USAGE.md)
 
-**用一个 JAR，把空表变成可测试的业务场景。**
+**在本地界面配置规则，或让 AI 通过 MCP 在你的测试库中生成彼此关联的数据。**
 
 给用户表生成人名和手机号很容易；让订单引用正确的用户，让组织形成一棵树，让不同类型的用户享有不同折扣，才是真正的测试场景。faker-data 把这些关系和规则放进一个本地可视化工作台，也让 AI 能通过 HTTP 接口完成同样的流程。
 
 ![faker-data 实际首页](docs/images/homepage-a-desktop.jpg)
+
+## 从这里开始
+
+| 目标 | 入口 |
+| --- | --- |
+| 先体验可视化界面 | [下载 Release JAR](https://github.com/yanjiajun0604-commits/faker-data/releases)，运行 `java -jar faker-data-0.1.1.jar`，访问 `http://127.0.0.1:8085/` |
+| 让 AI 通过 MCP 调用 | [从源码构建](#构建与开发)，配合匹配的 JAR 和适配器，按[统一启动器说明](docs/launcher.md)安装并生成客户端配置 |
+| 跑通完整数据流程 | [在隔离 MySQL 库生成、核查和清理关联订单](docs/order-lifecycle.md) |
+| 看可以继续审批的单据 | [运行可选的公开 Flowable 示例](examples/flowable-approval/README.md)，体验真实待办、提交和两级审批 |
+
+本文中的 MCP 启动器、库结构调查、预览、批次核查和清理指当前源码功能。下载的 Release 以对应版本功能为准。参见[各版本访问地址](docs/access-url.md)和[已验证环境](docs/compatibility.md)。
 
 ### 你可以用它做什么？
 
@@ -52,9 +54,9 @@
 
 - **只想使用工具：** 在 [Releases](https://github.com/yanjiajun0604-commits/faker-data/releases) 下载可执行 JAR，无需编译前端或后端。
 - **希望查看或修改代码：** 本仓库包含 Java 后端、Vue 前端、测试、构建脚本和 MIT 许可证。
-- **希望让 AI 操作：** 阅读 [AI_USAGE.md](AI_USAGE.md)，使用附带 JSON 示例和零第三方依赖的 Python 客户端。
+- **希望让 AI 操作：** 通过 [stdio MCP](docs/mcp.md) 调查表结构、预览规则、确认生成、核查批次并预览清理计划。也可以使用 [HTTP API](AI_USAGE.md) 及其 Python 示例。
 
-[通用单据配置示例](docs/document-recipes.md) 演示精确状态数量、共享主键和主子表关联，全部使用现有规则。示例状态不代表已创建可运行的工作流实例。 当前源码还新增[已有数据引用与父记录展开](docs/existing-data.md)，通过 JSON 配置使用。
+[通用单据配置示例](docs/document-recipes.md) 演示精确状态数量、共享主键和主子表关联。[Flowable 示例](examples/flowable-approval/README.md) 为指定的公开流程生成实例、待办和历史。规则配置见[已有数据引用与父记录展开](docs/existing-data.md)及[可复现生成](docs/reproducibility.md)。
 
 当前源码支持默认关闭的[字段级本地扩展](docs/local-extensions.md)：普通字段使用现有规则，仅复杂字段调用可信本地代码。方案沿用“使用”入口及字段编辑器，可通过 [stdio MCP 适配器](docs/mcp.md) 调用同一引擎，仍需针对目标系统验收。
 

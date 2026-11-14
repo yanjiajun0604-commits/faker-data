@@ -44,7 +44,7 @@ public class GenerationEngine {
         Map<TableGenerationPlan,Long> treeSeeds=new IdentityHashMap<>();
         for(TableGenerationPlan plan:plans) {
             if(plan.table.getTreeConfig()!=null) {
-                long seed=ThreadLocalRandom.current().nextLong();
+                long seed=plan.table.getGenerationSeed()==null?ThreadLocalRandom.current().nextLong():faker.data.service.generate.GenerationRandom.seed(plan.table.getGenerationSeed(),plan.table.getName().toLowerCase(Locale.ROOT),"__tree",0);
                 treeSeeds.put(plan,seed);
                 plan.table.setSize(new TreeTopologyEngine(seed).count(plan.table.getTreeConfig()));
             }

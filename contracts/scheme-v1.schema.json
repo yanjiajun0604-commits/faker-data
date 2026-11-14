@@ -411,6 +411,15 @@
           "minLength": 1,
           "maxLength": 256
         },
+        "generationSeed": {
+          "type": ["integer", "null"],
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "locale": {
+          "type": ["string", "null"],
+          "enum": ["zh_CN", "en", null]
+        },
         "size": {
           "type": [
             "integer",

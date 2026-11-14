@@ -64,7 +64,9 @@ final class ExistingDataLoader {
             try(PreparedStatement statement=connection.prepareStatement(sql)) {
                 statement.setMaxRows(maxRows+1);
                 statement.setQueryTimeout(30);
-                statement.setFetchSize(Math.min(1000,maxRows+1));
+                // MySQL otherwise buffers the complete result before the cache limit
+                // can be enforced. Consume its streaming cursor inside this read scope.
+                statement.setFetchSize(connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("mysql")?Integer.MIN_VALUE:Math.min(1000,maxRows+1));
                 for(int index=0;index<parameters.size();index++)statement.setObject(index+1,parameters.get(index));
                 try(ResultSet rows=statement.executeQuery()) {
                     ResultSetMetaData metadata=rows.getMetaData();

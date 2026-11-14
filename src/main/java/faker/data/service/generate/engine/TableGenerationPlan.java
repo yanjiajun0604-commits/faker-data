@@ -93,6 +93,10 @@ final class TableGenerationPlan {
         PreparedRule(MetaTypeVO source,String columnName,String path) {
             this.columnName=columnName;this.path=path;
             RuleArguments.check(source);
+            if(table.getGenerationSeed()!=null && source.getCode()!=null) {
+                if(!Arrays.asList("FIX.UUID","FIX.PEOPLE_NAME","FIX.TEL","REG.INCREMENT_NUM","REG.RANGE_NUM","REG.RANGE_STRING","REG.DATE","REF.OTHER_TABLE","REF.SELF_COLUMN","RES.INPUTAREA","COND.EXPR","STRUCT.TREE_CODE","REG.TREE_CODE","STRUCT.TREE_PARENT","EXT.FIELD").contains(source.getCode()))throw new IllegalArgumentException("SEEDED_RULE_UNSUPPORTED: "+source.getCode());
+                if("COND.EXPR".equals(source.getCode()))PreviewSafety.expression(source.getCondition());
+            }
             this.source=source;
             strategy=MetaTypeFactory.getMetaTypeImpl(source);
             if(strategy==null)throw new IllegalArgumentException("不支持的生成规则："+source.getCode());
@@ -177,7 +181,8 @@ final class TableGenerationPlan {
             values.clear();args.clear();rowId=null;
             values.put("__rowIndex",index);
             if(!table.getRefOtherTables().isEmpty()) {
-                rowId=UUID.randomUUID().toString();
+                // Internal cache identity is task/table scoped; it is not a DB UUID.
+                rowId=Integer.toString(index);
                 rowIds.computeIfAbsent(lowerTable,k->new ArrayList<>()).add(rowId);
             }
             args.put("rowId",rowId);args.put("rowValues",values);
@@ -194,7 +199,9 @@ final class TableGenerationPlan {
             if(states[position]==1)throw new IllegalArgumentException("同表字段存在循环引用："+columns[position].name);
             states[position]=1;
             ColumnPlan column=columns[position];
-            Object value=concatenate(column.rules,this,column,true);
+            Object value;
+            if(table.getGenerationSeed()==null && table.getLocale()==null)value=concatenate(column.rules,this,column,true);
+            else try(GenerationRandom.Scope ignored=GenerationRandom.scope(table.getGenerationSeed(),lowerTable,column.lowerName,index,table.getLocale())) {value=concatenate(column.rules,this,column,true);}
             output[position]=value;states[position]=2;
             values.put(column.name,value);
             if(!column.lowerName.equals(column.name))values.put(column.lowerName,value);

@@ -34,13 +34,13 @@ public class TelFixedMetaType extends AbstractFixedMetaType {
 
     public static String generateRandomPhoneNumber() {
         // 随机生成前三位
-        int index = random.nextInt(prefixArray.length);
+        int index = faker.data.service.generate.GenerationRandom.current().nextInt(prefixArray.length);
         String prefix = prefixArray[index];
 
         // 随机生成后八位
         StringBuilder suffix = new StringBuilder();
         for (int i = 0; i < 8; i++) {
-            int digit = random.nextInt(10);
+            int digit = faker.data.service.generate.GenerationRandom.current().nextInt(10);
             suffix.append(digit);
         }
         return prefix + suffix.toString();

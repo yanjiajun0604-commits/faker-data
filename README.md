@@ -1,17 +1,6 @@
 # faker-data
 
-Current-source setup: [unified Java + MCP launcher](docs/launcher.en.md), with isolated dependencies, client configuration and diagnostics. Older Release packages may not include it.
-
-Current source provides [built-in read-only database inspection](docs/database-inspection.en.md) through three MCP tools, plus database preflight and the original five generation/scheme tools. A separate database MCP is optional. This is a source preview, not a claim about an older downloaded JAR.
-
-Current-source preview: [AI MCP setup](docs/mcp.en.md), exact correlated references, and a portable [order demo](examples/create-order-schemes.py). These changes are not included in older release JARs.
-
-
-> **Access URL:** v0.1.1 and current source builds use `http://127.0.0.1:8085/`, without `/faker`. Older v0.1.0 downloads retain `http://127.0.0.1:8085/faker/`. See [access URLs and version compatibility](docs/access-url.md).
-
-### Test data that belongs together.
-
-**A local visual studio for relational test data — run one JAR, define your rules, and fill your test database.**
+**Generate related test data in your own database through a local UI or an AI agent using MCP.**
 
 **English** · [简体中文](README.zh-CN.md) · [Download](https://github.com/yanjiajun0604-commits/faker-data/releases/latest) · [AI / API guide](AI_USAGE.en.md)
 
@@ -23,6 +12,17 @@ Current-source preview: [AI MCP setup](docs/mcp.en.md), exact correlated referen
 Random names are useful. Orders linked to the right users, a department tree with valid parents, and discounts that follow membership rules are useful **together**. faker-data lets you describe those scenarios in a visual workspace and write the generated rows into your existing test tables.
 
 ![The actual faker-data homepage](docs/images/homepage-a-desktop.jpg)
+
+## Quick start
+
+| Goal | Where to start |
+| --- | --- |
+| Try the visual editor | [Run the released JAR](#run-it-no-source-build-required) and open `http://127.0.0.1:8085/` for v0.1.1 |
+| Connect an MCP client | [Build from this checkout](#build-from-source), then follow the [Java and MCP launcher guide](docs/launcher.en.md) using the matching JAR and adapter |
+| Try a complete data lifecycle | [Generate, verify and clean up related orders in an isolated MySQL fixture](docs/order-lifecycle.en.md) |
+| See working approval tasks | [Run the optional Flowable example](examples/flowable-approval/README.en.md), including real inbox tasks, submission and two-stage approval |
+
+The MCP launcher, database inspection, preview, batch verification and cleanup described here refer to this source tree. Release downloads have their own feature set. See [access URLs by version](docs/access-url.md) and the [tested compatibility matrix](docs/compatibility.en.md).
 
 ## From empty tables to useful scenarios
 
@@ -73,7 +73,7 @@ java -jar faker-data-0.1.1.jar
 
 - **Visual:** connect → select tables → set rules → generate and monitor.
 - **Repeatable:** save a scheme locally, load it, and adjust the next run.
-- **Agent-driven:** person → local AI agent → HTTP API → test database. Give your agent [AI_USAGE.en.md](AI_USAGE.en.md) or the [full Chinese guide](AI_USAGE.md).
+- **Agent-driven:** connect a local AI client over [stdio MCP](docs/mcp.en.md) or use the [HTTP API](AI_USAGE.en.md). With current-source MCP, the agent can inspect the schema, preview rules, submit a confirmed run, verify the batch and plan its cleanup.
 
 ```text
 “Generate 20 users and 50 orders referencing those users.
@@ -84,7 +84,7 @@ metadata → generation rules → task ID → confirmed completion
 
 Complete examples: [relational data](examples/generate-demo.json), [tree data](examples/generate-tree.json), [MySQL sample schema](examples/mysql-demo-schema.sql), and a [standard-library Python client](examples/ai_client.py). These examples target their own demo tables; inspect your actual schema before using them elsewhere.
 
-For a configuration-only document example with exact state counts, shared keys and line items, see [document data recipes](docs/document-recipes.en.md). State labels do not create operational workflow instances. Current source also adds [existing-data references and parent expansion](docs/existing-data.en.md) through JSON configuration.
+Use [document data recipes](docs/document-recipes.en.md) for state counts, shared keys and line items. The [Flowable example](examples/flowable-approval/README.en.md) adds engine instances, tasks and history for a specific public workflow. See [existing-data references and parent expansion](docs/existing-data.en.md) and [reproducible generation](docs/reproducibility.en.md) for rule configuration.
 
 ## Rules that fit real test cases
 
@@ -160,7 +160,7 @@ The release has been checked against an isolated **MySQL 8.0.31** instance throu
 
 Unit/integration tests use SQLite and H2 without requiring an external target database. Optional Redis tests run only with an explicit `-Dfaker.redis.test.port=...` value. Oracle and Dameng drivers are included from public Maven coordinates; their live compatibility was **not** verified in this release.
 
-The tool inserts into existing tables. It does not create a schema, clear old data, or automatically avoid existing unique values. Increment sequences restart per task. A task reaches FINISHED/100 only after the target transaction returns successfully; interrupted tasks are marked failed on restart and are not replayed automatically. Use transactional target tables when relying on rollback.
+Prepare the target tables and account for existing unique values before generation. Increment sequences restart per task. A task reaches FINISHED/100 after the target transaction commits. If a request is interrupted, inspect its original receipt before resubmitting. Current-source [batch cleanup](docs/batch-cleanup.en.md) previews tracked rows and rechecks the approved plan before deleting. Use transactional target tables when relying on rollback.
 
 ## Local use and credentials
 

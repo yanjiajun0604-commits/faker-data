@@ -12,6 +12,8 @@ public final class GenerationValidator {
         for(TableVO table:tables) {
             if(table==null)throw new IllegalArgumentException("Null table");
             identifier(table.getName(),true);
+            if(table.getLocale()!=null && !Arrays.asList("zh_CN","en").contains(table.getLocale()))throw new IllegalArgumentException("GENERATION_LOCALE_UNSUPPORTED");
+            if(table.getGenerationSeed()!=null && (table.getGenerationSeed() < -9007199254740991L || table.getGenerationSeed()>9007199254740991L))throw new IllegalArgumentException("GENERATION_SEED_SAFE_INTEGER_REQUIRED");
             if(!names.add(table.getName().toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("Duplicate table: "+table.getName());
             if(table.getExistingData()==null && table.getParentRows()==null && table.getTreeConfig()==null && (table.getSize()==null || table.getSize()<0))
                 throw new IllegalArgumentException("Generated table requires a non-negative size: "+table.getName());

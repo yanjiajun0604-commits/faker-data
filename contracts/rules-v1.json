@@ -106,5 +106,30 @@
       "localCode": true
     }
   ],
-  "semantics": "Use ordinary rules for supported fields; EXT.FIELD fills only unsupported values. See the bilingual rule/preview guides for semantic and runtime limits."
+  "semantics": "Use ordinary rules for supported fields; EXT.FIELD fills only unsupported values. See the bilingual rule/preview guides for semantic and runtime limits.",
+  "reproducibility": {
+    "algorithmVersion": 1,
+    "tableFields": [
+      "generationSeed",
+      "locale"
+    ],
+    "seedRange": [
+      -9007199254740991,
+      9007199254740991
+    ],
+    "nameLocales": [
+      "zh_CN",
+      "en"
+    ],
+    "unsupportedSeededRules": [
+      "FIX.IDENTIF",
+      "REG.STYLE"
+    ],
+    "outsideSeedScope": [
+      "EXT.FIELD outputs",
+      "database defaults and triggers",
+      "mutable source snapshots"
+    ],
+    "time": "REG.DATE uses explicit absolute epoch-millisecond endpoints; keep JVM/DB timezone fixed"
+  }
 }

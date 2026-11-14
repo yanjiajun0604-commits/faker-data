@@ -36,5 +36,25 @@ class GenerationPreviewTest {
     }
     @Test void ordinaryConditionsUseOnlyReviewedBuiltinFunctions(){Map<String,Object> table=table("preview_rows",1,col("label","java.lang.String",m("code","COND.EXPR","condition","contains('fixture','fix')","onTrue",Arrays.asList(m("code","RES.INPUTAREA","inputs",Arrays.asList(m("value","yes","weight",1)))))));Map response=http.postForObject("/generation/preview",body(Arrays.asList(table)),Map.class);assertEquals(0,response.get("code"),response.toString());assertTrue(response.toString().contains("yes"));assertEquals(0,InsertCounter.calls);}
     @Test void previewRedactsCredentialFieldsAndRejectsUnboundedExpansion(){target.execute("ALTER TABLE preview_rows ADD COLUMN password VARCHAR(50)");Map table=table("preview_rows",1,fixed("password","java.lang.String","do-not-publish-fixture"));Map response=http.postForObject("/generation/preview",body(Arrays.asList(table)),Map.class);assertEquals(0,response.get("code"),response.toString());assertFalse(response.toString().contains("do-not-publish-fixture"));assertTrue(response.toString().contains("CREDENTIAL_REDACTED"));Map parent=table("preview_parent",2,col("id","java.lang.String",m("code","FIX.UUID")));target.execute("CREATE TABLE preview_parent(id VARCHAR(36) PRIMARY KEY)");Map child=table("preview_rows",0,fixed("label","java.lang.String","value"));child.put("parentRows",m("table","preview_parent","rowsPerParent",10000));response=http.postForObject("/generation/preview",body(Arrays.asList(parent,child)),Map.class);assertNotEquals(0,response.get("code"));assertEquals(0,InsertCounter.calls);}
+    @SuppressWarnings("unchecked") @Test void seededPreviewRepeatsAndMatchesActualGeneration() throws Exception {
+        target.execute("ALTER TABLE preview_rows ALTER COLUMN label VARCHAR(200)");
+        Map table=table("preview_rows",3,col("label","java.lang.String",m("code","FIX.UUID"),m("code","FIX.PEOPLE_NAME"),m("code","REG.RANGE_NUM","minSize",1,"maxSize",1000)));
+        table.put("generationSeed",42L);table.put("locale","en");Map body=body(Arrays.asList(table));
+        Map first=http.postForObject("/generation/preview",body,Map.class),second=http.postForObject("/generation/preview",body,Map.class);
+        assertEquals(0,first.get("code"),first.toString());assertEquals(0,second.get("code"),second.toString());
+        List rows=(List)((Map)((List)((Map)first.get("data")).get("tables")).get(0)).get("rows");
+        assertEquals(rows,((Map)((List)((Map)second.get("data")).get("tables")).get(0)).get("rows"));
+        String task=(String)http.postForObject("/publish/task/GEN_DATA",body,Map.class).get("data");Map state=null;
+        for(int i=0;i<200;i++){state=(Map)http.getForObject("/asyncTask/queryProcess/"+task,Map.class).get("data");if(Arrays.asList("FINISHED","ERROR").contains(state.get("state")))break;Thread.sleep(25);}
+        assertEquals("FINISHED",state.get("state"),state.toString());List<String> labels=target.queryForList("SELECT label FROM preview_rows ORDER BY id",String.class);
+        for(int i=0;i<3;i++)assertEquals(((List)rows.get(i)).get(0),labels.get(i));
+        assertTrue(labels.stream().allMatch(value->value.matches("[A-Za-z0-9 -]+")));assertEquals(3,new HashSet<>(labels).size());
+        table.put("generationSeed",43L);assertNotEquals(rows,((Map)((List)((Map)http.postForObject("/generation/preview",body,Map.class).get("data")).get("tables")).get(0)).get("rows"));
+    }
+    @Test void seededUnsupportedRuleAndLocaleFailExplicitly(){
+        Map table=table("preview_rows",1,col("label","java.lang.String",m("code","FIX.IDENTIF")));table.put("generationSeed",42L);
+        Map response=http.postForObject("/generation/validate",m("tables",Arrays.asList(table)),Map.class);assertNotEquals(0,response.get("code"));assertTrue(response.toString().contains("SEEDED_RULE_UNSUPPORTED"));
+        table.put("generationSeed",null);table.put("locale","unknown");response=http.postForObject("/generation/validate",m("tables",Arrays.asList(table)),Map.class);assertNotEquals(0,response.get("code"));assertTrue(response.toString().contains("GENERATION_LOCALE_UNSUPPORTED"));
+    }
     public static class InsertCounter implements org.h2.api.Trigger {static int calls;public void init(java.sql.Connection c,String schema,String trigger,String table,boolean before,int type){}public void fire(java.sql.Connection c,Object[] old,Object[] row){calls++;}public void close(){}public void remove(){}}
 }

@@ -11,7 +11,7 @@ public class UUIDFixedMetaType extends AbstractFixedMetaType {
 
     @Override
     protected Object parseValue() {
-        return UUID.randomUUID().toString();
+        return faker.data.service.generate.GenerationRandom.uuid().toString();
     }
 
     @Override
