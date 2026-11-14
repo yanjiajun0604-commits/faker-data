@@ -42,6 +42,8 @@ On Windows use `C:/path/to/faker-data/.venv/Scripts/python.exe` as command and f
 
 ## AI workflow
 
+After adding the configuration in WorkBuddy, trust `faker-data` in the connector settings and start a new conversation. The connection profile requires a non-empty test account password. Replace `CHANGE_ME` in the private local connections file.
+
 Ask the AI to inspect the selected database with built-in `list_tables`, `describe_table` and `read_rows`, then read `faker://rules`. A separate database MCP is optional; business relationships and workflow requirements still need evidence. See [inspection limits and HTTP examples](database-inspection.en.md). For example: “Generate 50 saved orders, 20 submitted and 100 approved, with details and valid existing customers. Use ordinary rules wherever supported. Validate, execute within my authorized test database, and report tasks and verification queries.”
 
 | Tool | Behavior |
@@ -73,6 +75,31 @@ For sharing, use the [portable format and private bindings](portable-schemes.en.
 `connection` selects a private local profile (default: `default`). Execution uses the explicitly selected profile, not stale saved credentials. Configuration validation does not prove database constraints, candidate availability, installed extensions or business workflow validity. `FINISHED` means generation completed, not business acceptance.
 
 Multiple states are separate schemes and transactions. Do not automatically retry timed-out writes; retain and query task IDs. If submission timed out before returning an ID, inspect Java task records and target data first. Cleanup is opt-in, bounded to tracked inserts and explicitly declared verified descendants, and requires a reviewed plan; see [cleanup limits](batch-cleanup.en.md).
+
+### Example tool arguments
+
+`read_rows` requires `columns`. Pass `order_by` as an array of sort objects. This example reads enabled customers in the public order fixture.
+
+```json
+{
+  "table": "demo_customers",
+  "columns": ["id", "display_name"],
+  "where": [{"column": "enabled", "op": "eq", "value": 1}],
+  "order_by": [{"column": "id", "direction": "ASC"}],
+  "limit": 10
+}
+```
+
+After generation, call `get_task` with the returned `taskId` and read its `state` field, which can be `FINISHED`.
+
+Each `verify_batch` `REFERENCE` check describes one relationship. When two child columns independently reference the same parent's `id`, use two checks. For a composite primary key, include all column mappings in one check. Pass this array as `checks` for the order example.
+
+```json
+[
+  {"kind": "REFERENCE", "table": "demo_order_tasks", "targetTable": "demo_order_contents", "columns": {"input_content_id": "id"}, "targetScope": "BATCH", "allowNull": false},
+  {"kind": "REFERENCE", "table": "demo_order_tasks", "targetTable": "demo_order_contents", "columns": {"output_content_id": "id"}, "targetScope": "BATCH", "allowNull": false}
+]
+```
 
 ## Portable demo
 

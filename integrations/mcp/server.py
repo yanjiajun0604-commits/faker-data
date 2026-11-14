@@ -50,8 +50,10 @@ class JavaAPI:
     def connection(self, name: str) -> dict[str, Any]:
         profile = self.profiles().get(name)
         if (not isinstance(profile, dict) or profile.get("type") not in {"MYSQL", "ORACLE", "DM"}
-                or not all(isinstance(profile.get(k), str) and profile[k] for k in ("url", "username", "password"))):
-            raise ToolError("Unknown or incomplete connection profile. Configure type, url, username and password locally.")
+                or not all(isinstance(profile.get(k), str) and profile[k] for k in ("url", "username"))):
+            raise ToolError("Unknown or incomplete connection profile. Check the selected name, type, url and username in the local connections file.")
+        if not isinstance(profile.get("password"), str) or not profile["password"] or "CHANGE_ME" in profile["password"]:
+            raise ToolError("The selected connection requires a non-empty database password. Set the test account password in the private local connections file.")
         return {k: profile[k] for k in ("type", "url", "username", "password")}
 
     def scrub(self, value: Any) -> Any:
