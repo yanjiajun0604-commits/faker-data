@@ -181,7 +181,8 @@ final class TableGenerationPlan {
             values.clear();args.clear();rowId=null;
             values.put("__rowIndex",index);
             if(!table.getRefOtherTables().isEmpty()) {
-                rowId=UUID.randomUUID().toString();
+                // Internal cache identity is task/table scoped; it is not a DB UUID.
+                rowId=Integer.toString(index);
                 rowIds.computeIfAbsent(lowerTable,k->new ArrayList<>()).add(rowId);
             }
             args.put("rowId",rowId);args.put("rowValues",values);
