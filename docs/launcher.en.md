@@ -9,7 +9,7 @@ Current source includes `faker.py` for the Java UI and Python stdio MCP adapter.
 Install Java 8+ and Python 3.10+. From the project root (use `python3` on macOS/Linux):
 
 ```sh
-python faker.py setup --jar /absolute/path/to/faker-data-0.1.1.jar
+python faker.py setup --jar /absolute/path/to/faker-data-0.1.2.jar
 python faker.py doctor
 ```
 
@@ -47,6 +47,8 @@ Open `http://127.0.0.1:8085/`. Ctrl+C stops only this command's child. Busy port
 ## AI client
 
 In WorkBuddy, trust `faker-data` in the connector settings after adding the configuration, then start a new conversation. Call `list_tables` to check that the tool is available.
+
+If an enabled local stdio entry exposes no tools in WorkBuddy and uses `--attach`, check that the Java service is still listening on the configured port. If you do not run a separate persistent Java service, use the default configuration so the connector manages Java, then reload the connector.
 
 ```sh
 python faker.py config

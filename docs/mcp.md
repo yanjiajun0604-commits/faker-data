@@ -11,7 +11,7 @@ MCP 适配器把现有 Java 生成器接给 AI 客户端。普通字段仍使用
 需要 Java 8+、Python 3.10+，以及支持 stdio MCP 的 AI 客户端。在项目根目录执行：
 
 ```sh
-java -jar faker-data-0.1.1.jar
+java -jar faker-data-0.1.2.jar
 ```
 
 另一个终端安装适配器。Windows：
@@ -114,6 +114,12 @@ AI 应先用内置只读工具理解表结构、关联及业务条件；不必�
 ]
 ```
 
+核对引用是否指向目标库中已有的客户时，使用 `DATABASE`。例如：
+
+```json
+{"kind":"REFERENCE","table":"demo_orders","targetTable":"demo_customers","columns":{"customer_id":"id"},"targetScope":"DATABASE","allowNull":false}
+```
+
 ## 可运行的通用案例
 
 需要可重复的完整操作时使用[公开订单验收包](order-lifecycle.md)：实际通过 stdio MCP 生成、核查、保留回执，之后明确授权按批次清理；可选择二进制字段扩展。
@@ -133,7 +139,7 @@ python examples/create-order-schemes.py --output order-schemes --counts 50 20 10
 ```sh
 python examples/install-field-extension.py --root ./data/extensions --demo orders
 python examples/create-order-schemes.py --output order-schemes-binary --counts 50 20 100 --with-binary
-java -jar faker-data-0.1.1.jar --faker.extensions.enabled=true
+java -jar faker-data-0.1.2.jar --faker.extensions.enabled=true
 ```
 
 安装命令只复制公开 Python 示例和生成本机 manifest，不启用或运行扩展；目标目录必须与 Java 的 `faker.extensions.root` 一致。安装器不覆盖已有扩展。二进制是公开演示格式，普通 UUID、状态及关联仍由规则引擎生成。扩展是可信本地代码，不是沙箱。

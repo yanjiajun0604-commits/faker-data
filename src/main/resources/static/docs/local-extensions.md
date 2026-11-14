@@ -7,7 +7,7 @@
 扩展默认关闭，以当前操作系统用户权限执行可信本地代码，独立进程不是安全沙箱。启动：
 
 ```sh
-java -jar faker-data-0.1.1.jar --faker.extensions.enabled=true --faker.extensions.root=/absolute/path/extensions
+java -jar faker-data-0.1.2.jar --faker.extensions.enabled=true --faker.extensions.root=/absolute/path/extensions
 ```
 
 在根目录的 `demo-field-codec/` 中放入[示例脚本](../examples/local-extension/generate.py)和 `extension.json`，把可执行文件改为本机绝对路径（Windows JSON 可使用 `/`）：

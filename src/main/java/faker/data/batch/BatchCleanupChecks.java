@@ -15,7 +15,13 @@ final class BatchCleanupChecks {
     static final class Check {
         Map<String,Object> report=new LinkedHashMap<>();Map<String,Owned> owned=new LinkedHashMap<>();
         List<Map<String,Object>> blockers=new ArrayList<>();List<String> order=new ArrayList<>();Map<String,Set<String>> declaredEdges=new LinkedHashMap<>();List<OwnershipJournal.Relation> declared=new ArrayList<>();String manifest="",foreignHash="";int rowCount,derivedRowCount;
-        void block(String code,String table){if(blockers.size()<100)blockers.add(map("code",code,"table",table));}
+        void block(String code,String table){block(code,table,null);}
+        void block(String code,String table,String detail){
+            if(blockers.size()>=100)return;
+            Map<String,Object> blocker=map("code",code,"table",table);
+            if(detail!=null)blocker.put("detail",detail);
+            blockers.add(blocker);
+        }
         void finish(){report.put("eligible",blockers.isEmpty());report.put("rowCount",rowCount);report.put("derivedRowCount",derivedRowCount);report.put("blockers",blockers);report.put("deleteOrder",order);report.put("scope","TRACKED_INSERTS_AND_EXPLICIT_VERIFIED_DERIVED_RELATIONS");report.put("notes","Only predeclared, bounded and freshness-checked relations may add later rows. Unknown weak relations cannot be inferred. Delete triggers, incomplete visibility and unsupported/cyclic references block cleanup. Preview does not write target data.");}
     }
     private final GenerationBatchStore store;
@@ -105,7 +111,11 @@ final class BatchCleanupChecks {
                 boolean all=names.contains("ALL PRIVILEGES");if("*.*".equals(scope) && (all || names.contains("SELECT")))globalSelect=true;
                 if(all || names.contains("TRIGGER"))triggerScopes.add(scope);
             }
-            if(!globalSelect || revoked){check.block("METADATA_VISIBILITY_UNPROVEN",null);return;}
+            if(!globalSelect || revoked){
+                check.block("METADATA_VISIBILITY_UNPROVEN",null,
+                        "MySQL SHOW GRANTS must prove global SELECT without partial revokes to check for inbound foreign keys across schemas. Schema-only grants are insufficient. Use a separate, approved cleanup profile on an isolated test instance, or ask the database administrator to review the grants.");
+                return;
+            }
             for(Owned owned:check.owned.values()) {
                 TargetRowSnapshot table=owned.table;String scope="`"+table.catalog.replace("`","``")+"`.*";
                 if(!triggerScopes.contains("*.*") && !triggerScopes.contains(scope)){check.block("TRIGGER_VISIBILITY_UNPROVEN",table.table);continue;}

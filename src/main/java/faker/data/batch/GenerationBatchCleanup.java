@@ -28,6 +28,20 @@ public class GenerationBatchCleanup {
     }
     public Map<String,Object> get(String batch,String plan){return plans.receipt(batch,plan);}
     public Map<String,Object> rows(String batch,String plan,int offset,int limit){return plans.rows(batch,plan,offset,limit);}
+    public static final class PlanNotReady extends IllegalArgumentException {
+        private final Map<String,Object> diagnostic;
+
+        private PlanNotReady(Map<String,Object> receipt) {
+            super("CLEANUP_PLAN_NOT_READY");
+            diagnostic=new LinkedHashMap<>();
+            for(String field:Arrays.asList("batchId","planId","state","blockers","reason"))
+                if(receipt.containsKey(field))diagnostic.put(field,receipt.get(field));
+            diagnostic.put("next","Inspect the blockers and request a new preview once the cause is resolved.");
+        }
+
+        public Map<String,Object> diagnostic(){return diagnostic;}
+    }
+
     public Map<String,Object> execute(String batch,BatchCleanupRequest request) {
         if(!request.isConfirmDelete())throw new IllegalArgumentException("CLEANUP_CONFIRMATION_REQUIRED");
         acquire();Connection target=null;boolean claimed=false,commitAttempted=false;
@@ -36,7 +50,7 @@ public class GenerationBatchCleanup {
             plan=plans.get(batch,request.getPlanId());
             if(!Objects.equals(plan.hash,request.getPlanHash()))throw new IllegalArgumentException("CLEANUP_PLAN_HASH_MISMATCH");
             if("DONE".equals(plan.state) || "UNKNOWN".equals(plan.state))return plans.receipt(batch,plan.id);
-            if(!"READY".equals(plan.state))throw new IllegalArgumentException("CLEANUP_PLAN_NOT_READY");
+            if(!"READY".equals(plan.state))throw new PlanNotReady(plans.receipt(batch,plan.id));
             if(System.currentTimeMillis()>plan.expires)throw new IllegalArgumentException("CLEANUP_PLAN_EXPIRED");
             plans.claim(plan);claimed=true;
             target=open(request);target.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);target.setAutoCommit(false);

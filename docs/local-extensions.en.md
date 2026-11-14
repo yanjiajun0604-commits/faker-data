@@ -9,7 +9,7 @@ Every generated field uses the existing `GEN_DATA` engine. Prefer ordinary UUID,
 Trusted local extensions are disabled by default. They execute with the OS user's permissions; a separate process is not a security sandbox.
 
 ```sh
-java -jar faker-data-0.1.1.jar --faker.extensions.enabled=true --faker.extensions.root=/absolute/path/extensions
+java -jar faker-data-0.1.2.jar --faker.extensions.enabled=true --faker.extensions.root=/absolute/path/extensions
 ```
 
 Create `demo-field-codec/` under the extension root, copy the [example script](../examples/local-extension/generate.py) into it, and add `extension.json`. Replace the executable with a real absolute path; Windows JSON paths may use `/`.

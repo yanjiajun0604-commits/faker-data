@@ -45,6 +45,7 @@ def main():
     parser.add_argument('--jar', type=Path, required=True)
     parser.add_argument('--java', default='java')
     parser.add_argument('--profiles', type=Path)
+    parser.add_argument('--schema-only-profile')
     parser.add_argument('--confirm-demo-write', action='store_true')
     parser.add_argument('--report', type=Path, required=True)
     args = parser.parse_args()
@@ -77,6 +78,8 @@ def main():
                 env = dict(os.environ, FAKER_MCP_E2E='1', FAKER_BASE_URL=base,
                            FAKER_CONNECTIONS_FILE=str(args.profiles.resolve()),
                            FAKER_MCP_CLEANUP_CONNECTION='default')
+                if args.schema_only_profile:
+                    env['FAKER_MCP_SCHEMA_ONLY_CONNECTION'] = args.schema_only_profile
                 subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s',
                                 str(ROOT/'integrations/mcp'), '-p', 'test_protocol.py', '-v'],
                                cwd=ROOT, env=env, check=True)

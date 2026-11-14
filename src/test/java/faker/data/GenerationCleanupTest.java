@@ -56,6 +56,20 @@ class GenerationCleanupTest {
         assertNotEquals(0,execute(id,plan,false).get("code"));Map result=execute(id,plan,true);assertEquals(0,result.get("code"),result.toString());Map report=(Map)result.get("data");assertEquals("DONE",report.get("state"));assertEquals(6,report.get("deletedRows"));assertEquals(true,report.get("verifiedAbsent"));
         assertEquals("CLEANED",store.get(id).get("state"));assertEquals(1,target.queryForObject("SELECT COUNT(*) FROM cleanup_parents",Integer.class));assertEquals(1,target.queryForObject("SELECT COUNT(*) FROM cleanup_children",Integer.class));assertEquals("keep",target.queryForObject("SELECT label FROM cleanup_parents WHERE id='original-parent'",String.class));assertEquals("DONE",((Map)execute(id,plan,true).get("data")).get("state"));
     }
+    @Test void executingBlockedPlanReportsItsBlockersWithoutDeleting() throws Exception {
+        String id=generate(recipe());
+        target.update("INSERT INTO cleanup_external VALUES('protected-reference',?)",parentKey(id));
+        Map<String,Object> plan=preview(id);
+        blocker(plan,"EXTERNAL_REFERENCE");
+        Map result=execute(id,plan,true);
+        assertNotEquals(0,result.get("code"));
+        assertEquals("CLEANUP_PLAN_NOT_READY",result.get("msg"));
+        Map diagnostic=(Map)result.get("diagnostic");
+        assertNotNull(diagnostic);
+        assertEquals("BLOCKED",diagnostic.get("state"));
+        assertEquals(plan.get("blockers"),diagnostic.get("blockers"));
+        assertEquals(3,target.queryForObject("SELECT COUNT(*) FROM cleanup_parents",Integer.class));
+    }
     @Test void changedRowsInvalidatePlanWithoutDeletingAnything() throws Exception {
         String id=generate(recipe());Map<String,Object> plan=preview(id);target.update("UPDATE cleanup_parents SET label='changed' WHERE id=?",parentKey(id));Map result=execute(id,plan,true);assertNotEquals(0,result.get("code"));assertEquals(3,target.queryForObject("SELECT COUNT(*) FROM cleanup_parents",Integer.class));assertEquals(5,target.queryForObject("SELECT COUNT(*) FROM cleanup_children",Integer.class));assertEquals("COMMITTED",store.get(id).get("state"));blocker(preview(id),"ROW_CHANGED_OR_MISSING");
     }

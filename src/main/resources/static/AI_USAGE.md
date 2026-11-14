@@ -11,7 +11,7 @@
 用户启动当前源码构建的 JAR（下例文件名按本地构建产物填写）：
 
 ```sh
-java -jar faker-data-0.1.1.jar
+java -jar faker-data-0.1.2.jar
 ```
 
 默认基地址为 `http://127.0.0.1:8085`，网页在该地址后加 `/`。应用会自动建立自己的 SQLite 状态库，不需要为应用配置 MySQL 或 Redis；但生成数据仍需目标 MySQL、Oracle 或达梦数据库及相应权限。
