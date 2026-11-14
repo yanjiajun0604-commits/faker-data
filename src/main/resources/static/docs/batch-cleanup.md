@@ -13,6 +13,8 @@
 
 HTTP 对应 `POST /batches/{id}/cleanup/preview`（请求 dataSource）、`POST /batches/{id}/cleanup/execute`（dataSource、planId、planHash、confirmDelete）、`GET /batches/{id}/cleanup/plans/{planId}`。连接仍只从本机安全配置提供。读取计划／批次不删除数据。
 
+如果执行返回 `CLEANUP_PLAN_NOT_READY`，查看 `diagnostic.state` 和 `diagnostic.blockers`，或用 `get_cleanup` 读取原计划。MySQL 的 `METADATA_VISIBILITY_UNPROVEN` 表示当前账号无法证明能发现跨库引用，仅有目标库授权也会被拦。使用隔离测试实例中的独立清理连接，或请数据库管理员核查权限，再重新预览。
+
 ## 执行保证与拒绝条件
 
 计划绑定目标库身份、列／主键结构、完整写入快照、物理外键拓扑、期限及随机计划身份。执行时在串行化事务内按原主键锁定并重新核对，按外键从子表到父表删除，提交后使用独立连接验证原主键已不存在。不会关闭 FK 检查，不使用 TRUNCATE，不重置自增序列，不清日志。重复同一个 DONE／UNKNOWN 计划不再次删除。

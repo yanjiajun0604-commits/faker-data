@@ -9,7 +9,7 @@
 准备 Java 8+、Python 3.10+。从项目根目录执行（macOS/Linux 将 `python` 换成 `python3`）：
 
 ```sh
-python faker.py setup --jar /absolute/path/to/faker-data-0.1.1.jar
+python faker.py setup --jar /absolute/path/to/faker-data-0.1.2.jar
 python faker.py doctor
 ```
 
@@ -47,6 +47,8 @@ python faker.py start
 ## AI 客户端
 
 WorkBuddy 添加配置后，在连接器里对 `faker-data` 点一次「信任」，再开新会话。可以先调用 `list_tables` 确认工具可用。
+
+如果 WorkBuddy 已启用本地 stdio 条目但看不到工具，且配置带 `--attach`，先检查指定端口上的 Java 服务是否还在运行。没有独立常驻服务时用默认配置，让连接器启动和关闭自己的 Java 服务，然后重新加载连接器。
 
 ```sh
 python faker.py config

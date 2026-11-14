@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2
+
+- Ship the stdio MCP launcher, database inspection, generation previews, batch verification and guarded cleanup.
+- Recover interrupted generation with explicit retry guidance and preserve unknown outcomes.
+- Explain MySQL cleanup metadata visibility requirements and return the original blockers when executing a blocked plan.
+- Add first-run password guidance, a database reference example and WorkBuddy startup troubleshooting.
+
 ## 0.1.0 — Portable studio release
 
 - Bundle the Java backend and Vue frontend in one executable JAR.

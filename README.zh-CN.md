@@ -12,7 +12,7 @@
 
 | 目标 | 入口 |
 | --- | --- |
-| 先体验可视化界面 | [下载 Release JAR](https://github.com/yanjiajun0604-commits/faker-data/releases)，运行 `java -jar faker-data-0.1.1.jar`，访问 `http://127.0.0.1:8085/` |
+| 先体验可视化界面 | [下载 Release JAR](https://github.com/yanjiajun0604-commits/faker-data/releases)，运行 `java -jar faker-data-0.1.2.jar`，访问 `http://127.0.0.1:8085/` |
 | 让 AI 通过 MCP 调用 | [从源码构建](#构建与开发)，配合匹配的 JAR 和适配器，按[统一启动器说明](docs/launcher.md)安装并生成客户端配置 |
 | 跑通完整数据流程 | [在隔离 MySQL 库生成、核查和清理关联订单](docs/order-lifecycle.md) |
 | 看可以继续审批的单据 | [运行可选的公开 Flowable 示例](examples/flowable-approval/README.md)，体验真实待办、提交和两级审批 |
@@ -75,10 +75,10 @@ chmod +x mvnw run.sh
 ./run.sh
 ```
 
-首次启动脚本使用 Maven Wrapper 下载公开构建依赖并打包；完成后打开 **http://127.0.0.1:8085/**。后续启动复用已生成的 JAR。也可直接下载 v0.1.1 JAR 运行，旧版 v0.1.0 仍需访问 `/faker/`：
+首次启动脚本使用 Maven Wrapper 下载公开构建依赖并打包；完成后打开 **http://127.0.0.1:8085/**。后续启动复用已生成的 JAR。也可直接下载 v0.1.2 JAR 运行，旧版 v0.1.0 仍需访问 `/faker/`：
 
 ```sh
-java -jar faker-data-0.1.1.jar
+java -jar faker-data-0.1.2.jar
 ```
 
 端口占用时，无需编辑配置文件：
@@ -134,7 +134,7 @@ Redis 模式启动时检查连接；每任务一个 `faker:reference:<taskId>` �
 ```powershell
 .\mvnw.cmd test
 .\mvnw.cmd package
-java -jar target/faker-data-0.1.1.jar
+java -jar target/faker-data-0.1.2.jar
 ```
 
 前端源代码位于 `frontend/`，已构建的静态文件位于 `src/main/resources/static/`。仅修改后端时不需要 Node.js；修改前端时使用 Node.js/npm：

@@ -85,6 +85,29 @@ class ProtocolTest(unittest.IsolatedAsyncioTestCase):
                         {"kind": "VALUE_SET", "table": "demo_orders", "column": "state", "values": ["SAVED"]},
                         {"kind": "REFERENCE", "table": "demo_order_items", "targetTable": "demo_orders", "columns": {"order_id": "id"}, "targetScope": "BATCH"}]})
                     self.assertTrue(verified["valid"], verified)
+                    check = {"kind": "REFERENCE", "table": "demo_orders", "targetTable": "demo_customers",
+                             "columns": {"customer_id": "id"}, "targetScope": "DATABASE"}
+                    result = await call("verify_batch", {"batch_id": task["taskId"], "checks": [check]})
+                    self.assertTrue(result["valid"], result)
+                    error = await client.call_tool("verify_batch", {"batch_id": task["taskId"], "checks": [{**check, "targetScope": "EXISTING"}]})
+                    self.assertTrue(error.isError, error.content)
+                    self.assertIn("targetScope must be BATCH or DATABASE", error.content[0].text)
+
+                    schema_only = os.environ.get("FAKER_MCP_SCHEMA_ONLY_CONNECTION")
+                    if schema_only:
+                        blocked = await call("preview_cleanup", {"batch_id": task["taskId"], "connection": schema_only})
+                        self.assertEqual("BLOCKED", blocked["state"], blocked)
+                        blocker = next(item for item in blocked["blockers"] if item["code"] == "METADATA_VISIBILITY_UNPROVEN")
+                        self.assertIn("Schema-only grants are insufficient", blocker["detail"])
+                        refusal = await client.call_tool("execute_cleanup", {
+                            "batch_id": task["taskId"], "plan_id": blocked["planId"], "plan_hash": blocked["planHash"],
+                            "connection": schema_only, "confirm_delete": True})
+                        self.assertTrue(refusal.isError, refusal.content)
+                        self.assertIn("CLEANUP_PLAN_NOT_READY", refusal.content[0].text)
+                        self.assertIn("METADATA_VISIBILITY_UNPROVEN", refusal.content[0].text)
+                        unchanged = await call("verify_batch", {"batch_id": task["taskId"]})
+                        self.assertEqual("UNCHANGED", unchanged["snapshotStatus"])
+
                     cleanup_connection = os.environ.get("FAKER_MCP_CLEANUP_CONNECTION")
                     if cleanup_connection:
                         plan = await call("preview_cleanup", {"batch_id": task["taskId"], "connection": cleanup_connection})

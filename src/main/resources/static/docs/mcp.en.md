@@ -13,7 +13,7 @@ The recommended [unified launcher](launcher.en.md) installs isolated dependencie
 Requirements: Java 8+, Python 3.10+, and an AI client supporting stdio MCP. Start the Java JAR separately, then create a Python environment:
 
 ```sh
-java -jar faker-data-0.1.1.jar
+java -jar faker-data-0.1.2.jar
 python -m venv .venv
 ```
 
@@ -101,6 +101,12 @@ Each `verify_batch` `REFERENCE` check describes one relationship. When two child
 ]
 ```
 
+Use `DATABASE` to check a reference to an existing customer in the target database. For example:
+
+```json
+{"kind":"REFERENCE","table":"demo_orders","targetTable":"demo_customers","columns":{"customer_id":"id"},"targetScope":"DATABASE","allowNull":false}
+```
+
 ## Portable demo
 
 Run [mysql-order-schema.sql](../examples/mysql-order-schema.sql) in a dedicated empty test schema, then:
@@ -116,7 +122,7 @@ Optional field-only binary demo:
 ```sh
 python examples/install-field-extension.py --root ./data/extensions --demo orders
 python examples/create-order-schemes.py --output order-schemes-binary --counts 50 20 100 --with-binary
-java -jar faker-data-0.1.1.jar --faker.extensions.enabled=true
+java -jar faker-data-0.1.2.jar --faker.extensions.enabled=true
 ```
 
 The installer copies public Python code and writes a machine-specific manifest without overwriting existing extensions. Match the root to `faker.extensions.root` (default `data/extensions`). It does not enable or execute code. The binary format is a demo, not a universal workflow codec. Extensions run as trusted local code, not in a sandbox.

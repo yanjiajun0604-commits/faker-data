@@ -13,6 +13,8 @@ By default cleanup covers original tracked inserts. Optional [declared later-der
 
 HTTP: POST /batches/{id}/cleanup/preview with dataSource; POST /batches/{id}/cleanup/execute with dataSource/planId/planHash/confirmDelete; GET /batches/{id}/cleanup/plans/{planId}. Keep connection credentials local. Journal/plan reads never delete.
 
+If execution returns `CLEANUP_PLAN_NOT_READY`, inspect `diagnostic.state` and `diagnostic.blockers`, or read the original plan with `get_cleanup`. MySQL reports `METADATA_VISIBILITY_UNPROVEN` when grants cannot establish visibility of cross-schema references, including when access is limited to the target schema. Use a separate cleanup profile on an isolated test instance or ask the database administrator to review grants, then create a fresh preview.
+
 ## Checks and outcomes
 
 Plans bind database identity, column/PK schema, the complete write manifest, physical FK topology, expiry and random plan identity. Execution locks/rechecks original keys inside a serializable transaction, deletes child tables before parents and independently verifies absence after commit. FK checks stay enabled; no TRUNCATE, sequence resets or log purges. Reusing a DONE/UNKNOWN plan does not delete again.

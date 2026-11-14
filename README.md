@@ -17,7 +17,7 @@ Random names are useful. Orders linked to the right users, a department tree wit
 
 | Goal | Where to start |
 | --- | --- |
-| Try the visual editor | [Run the released JAR](#run-it-no-source-build-required) and open `http://127.0.0.1:8085/` for v0.1.1 |
+| Try the visual editor | [Run the released JAR](#run-it-no-source-build-required) and open `http://127.0.0.1:8085/` for v0.1.1 and later |
 | Connect an MCP client | [Build from this checkout](#build-from-source), then follow the [Java and MCP launcher guide](docs/launcher.en.md) using the matching JAR and adapter |
 | Try a complete data lifecycle | [Generate, verify and clean up related orders in an isolated MySQL fixture](docs/order-lifecycle.en.md) |
 | See working approval tasks | [Run the optional Flowable example](examples/flowable-approval/README.en.md), including real inbox tasks, submission and two-stage approval |
@@ -57,14 +57,14 @@ These screenshots demonstrate the editing interface, not a recommended field map
 
 ## Run it. No source build required.
 
-1. Download `faker-data-0.1.1.jar` from [Releases](https://github.com/yanjiajun0604-commits/faker-data/releases).
+1. Download `faker-data-0.1.2.jar` from [Releases](https://github.com/yanjiajun0604-commits/faker-data/releases).
 2. With Java installed (Java 8 verified), run:
 
 ```sh
-java -jar faker-data-0.1.1.jar
+java -jar faker-data-0.1.2.jar
 ```
 
-3. Open **http://127.0.0.1:8085/**. Older v0.1.0 downloads use `/faker/`; v0.1.1 uses the root URL.
+3. Open **http://127.0.0.1:8085/**. Older v0.1.0 downloads use `/faker/`; v0.1.1 and later use the root URL.
 4. Connect your authorized test database, select existing tables, configure field rules, and generate.
 
 **The application starts without a MySQL server, Redis, Node.js, or an OpenAI API key.** Your own target database is still required to actually insert generated data. AI integration is optional; the application does not contain a built-in LLM or translate prompts on its own.
@@ -106,7 +106,7 @@ The default queue has 2 workers and 100 waiting slots. The memory reference cach
 Optional Redis mode can offload reference values:
 
 ```sh
-java -jar faker-data-0.1.1.jar --faker.cache.backend=redis --faker.cache.redis-host=127.0.0.1 --faker.cache.redis-port=6379
+java -jar faker-data-0.1.2.jar --faker.cache.backend=redis --faker.cache.redis-host=127.0.0.1 --faker.cache.redis-port=6379
 ```
 
 Redis mode still uses a **single-process task queue**, not distributed scheduling. See [configuration and design](docs/portable-design.md) and the [Chinese configuration table](README.zh-CN.md#内存缓存和可选-redis) for environment variables.
@@ -114,7 +114,7 @@ Redis mode still uses a **single-process task queue**, not distributed schedulin
 Change the port without rebuilding the frontend:
 
 ```sh
-java -jar faker-data-0.1.1.jar --server.port=8095
+java -jar faker-data-0.1.2.jar --server.port=8095
 ```
 
 ## Build from source
@@ -139,7 +139,7 @@ The start script builds the JAR with Maven Wrapper if it is absent, then runs it
 ```sh
 ./mvnw test
 ./mvnw package
-java -jar target/faker-data-0.1.1.jar
+java -jar target/faker-data-0.1.2.jar
 ```
 
 To rebuild the UI (Node.js and npm required):
